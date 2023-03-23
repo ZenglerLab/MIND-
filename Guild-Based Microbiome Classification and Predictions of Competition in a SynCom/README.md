@@ -8,12 +8,16 @@
 Data cleaning and normalization. Genomes were annotated with the KEGG database using BlastKOALA annotation service (Kanehisa et al. 2016).
 
 
+
+
 ***
 
 ### 2.SynCom_Guild_classification_Competition_prediction.Rmd
 ##### Input File(s): Output from script 1
 
 Translational Efficiency was calculated and Guild-Based Microbiome Classification was performed based on TE. Figures 1b, 1c, 2c, 2d were generated. Supplementary Table S1 and Supplementary Figures S2 and S4 were also generated.
+
+
 
 
 ***
@@ -24,6 +28,8 @@ Translational Efficiency was calculated and Guild-Based Microbiome Classificatio
 Predicting community microbe interactions in soil (competitions and dropouts). Figure 2b and part of Figure 2e and Supplementary Figures S1a and S6 were generated.
 
 
+
+
 ***
 
 ### 4.metaG_customindex_abundances_second_dropout_experiment_dataprep.Rmd
@@ -32,9 +38,13 @@ Predicting community microbe interactions in soil (competitions and dropouts). F
 Data cleaning and normalization of experimental results of community microbe interactions in soil (competitions and dropouts).
 
 
+
+
 ***
 
 ### 5.metaG_customindex_abundances_second_dropout_experiment.Rmd
 ##### Input File(s): Output from script 4
 
 Experimental community microbal competition and dropout results were analyzed. Figure 2e and Supplementary Figures S7h and S7d were generated.
+
+
