@@ -5,7 +5,7 @@
 ### 1.multiomics_customindex_dataprep.Rmd
 ##### Needed File(s): Final_18_strains_with_strainN.saf, 18_strains_genenames.txt, 18_genomes_KEGG_BlastKOALA.csv, FINAL_SynCom_modifs_multiomics_count_table_formatted.tsv, Final_18_strains_with_strainN.saf
 
-Data cleaning and normalization. Genomes were annotated by KEGG database (BlastKOALA).
+Data cleaning and normalization. Genomes were annotated with the KEGG database using BlastKOALA annotation service (Kanehisa et al. 2016).
 
 
 ***
