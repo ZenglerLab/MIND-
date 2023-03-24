@@ -1,21 +1,35 @@
 <h4> <p align ="center"> Guild-Based Microbiome Classification and Predictions of Competition in a SynCom </p> </h4>
 
-***
+_Note: The following scripts need to be run in sequence._  
 
-### 1.multiomics_customindex_dataprep.Rmd
-##### Input File(s): Final_18_strains_with_strainN.saf, 18_strains_genenames.txt, 18_genomes_KEGG_BlastKOALA.csv, FINAL_SynCom_modifs_multiomics_count_table_formatted.tsv, Final_18_strains_with_strainN.saf
+*** 
 
-Data cleaning and normalization. Genomes were annotated with the KEGG database using BlastKOALA annotation service (Kanehisa et al. 2016).
-
-
-
+Example code to process sequencing data and obtain input files
 
 ***
 
-### 2.SynCom_Guild_classification_Competition_prediction.Rmd
-##### Input File(s): Output from script 1
+### 1.multiomics_customindex_dataprep.Rmd  
 
-Translational Efficiency was calculated and Guild-Based Microbiome Classification was performed based on TE. Figures 1b, 1c, 2c, 2d were generated. Supplementary Table S1 and Supplementary Figures S2 and S4 were also generated.
+This script performs filtering, normalization and formatting of count tables obtained after bioinformatic processing of multi-omics sequencing data.  
+
+__Input File(s):__  
+- Final_18_strains_with_strainN.saf  
+- 18_strains_genenames.txt  
+- 18_genomes_KEGG_BlastKOALA.csv  
+- FINAL_SynCom_modifs_multiomics_count_table_formatted.tsv  
+- Final_18_strains_with_strainN.saf  
+
+Data cleaning and normalization. Genomes were annotated with the KEGG database using BlastKOALA (Kanehisa et al. 2016).
+
+
+***
+
+### 2.SynCom_Guild_classification_Competition_prediction.Rmd  
+
+__Input File(s):__  
+- output from previous script: 1.multiomics_customindex_dataprep.Rmd
+
+Translational Efficiency (TE) was calculated and Guild-Based Microbiome Classification was performed based on TE. Figures 1b, 1c, 2c, 2d were generated. Supplementary Table S1 and Supplementary Figures S2 and S4 were also generated.
 
 
 
