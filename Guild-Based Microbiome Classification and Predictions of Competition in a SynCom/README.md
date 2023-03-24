@@ -1,6 +1,7 @@
 <h4> <p align ="center"> Guild-Based Microbiome Classification and Predictions of Competition in a SynCom </p> </h4>
 
 _Note: The following scripts need to be run in sequence._  
+_Note: Before running these scripts, users should modify the path of any data table import or export to fit location of corresponding files in their system_ 
 
 *** 
 
