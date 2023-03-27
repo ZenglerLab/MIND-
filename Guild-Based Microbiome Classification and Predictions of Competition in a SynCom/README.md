@@ -1,18 +1,34 @@
-<h4> <p align ="center"> Guild-Based Microbiome Classification and Predictions of Competition in a SynCom </p> </h4>
+# Guild-Based Microbiome Classification and Predictions of Competition in a SynCom  
 
 _Note: The following scripts need to be run in sequence._  
 _Note: Before running these scripts, users should modify the path of any data table import or export to match location of corresponding files in their system_ 
 
 *** 
 
-Data overview: Samples, experiment description
+## Overview
 
-***  
+### Experiment overview  
 
-Example code to process sequencing data and obtain input files.
+Multi-omics analysis of a 16-member synthetic community (SynCom) grown in complex medium (see Moyne et _al._, 2023 manuscript for details).  
+
+Multi-omics analysis included:  
+- metagenomics (metaG)  
+- metatranscriptomics (metaT)  
+- metaRibo-Seq (metaRS)  
+
+This directory includes statistical analysis of SynCom multiomics sequencing data, notably __Microbial Guilds Classification__ and __prediction of competition__ interactions between SynCm members.  
+
+It also contains statistical analysis of multiomics and metagenomics sequencing data of experimental dropout experiments used to validate guild-based competition predictions.  
+
+
+### Bioinformatics processing overview  
+
+Data tables used in this directory were obtained through bioinformatic processing of the sequencing data. For more information about sequencing data processing, please refer to Moyne et _al._, 2023.  
 
 
 ***
+
+## Scripts contents overview
 
 ### 1.multiomics_customindex_dataprep.Rmd  
 
@@ -30,7 +46,6 @@ Filtering, normalization and formatting of multiomics sequencing data.
 Genomes were annotated with the KEGG database using BlastKOALA (Kanehisa et al. 2016).  
 This script outputs a table which will be used as the input for the subsequent scripts ('write' command at the end of the script must be enabled).  
 
-***
 
 ### 2.SynCom_Guild_classification_Competition_prediction.Rmd  
 
@@ -41,8 +56,6 @@ __Overview:__
 Guild-Based Microbiome Classification algorithm. Guilds classify microbes based the metabolic pathways they prioritize, according to Translational Efficiency (TE = metaRibo-Seq / metaRNA-Seq) measurements.  
 This script produces manuscript figures 1b, 1c, 2c, 2d, as well as several supplementary figures and tables. 
 
-
-***
 
 ### 3.Dropout_SynCom_Expt1_metaG_taxonomic_abundances.Rmd
 
