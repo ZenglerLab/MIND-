@@ -1,11 +1,16 @@
 <h4> <p align ="center"> Guild-Based Microbiome Classification and Predictions of Competition in a SynCom </p> </h4>
 
 _Note: The following scripts need to be run in sequence._  
-_Note: Before running these scripts, users should modify the path of any data table import or export to fit location of corresponding files in their system_ 
+_Note: Before running these scripts, users should modify the path of any data table import or export to match location of corresponding files in their system_ 
 
 *** 
 
-Example code to process sequencing data and obtain input files
+Data overview: Samples, experiment description
+
+***  
+
+Example code to process sequencing data and obtain input files.
+
 
 ***
 
@@ -20,25 +25,31 @@ __Input File(s):__
 - FINAL_SynCom_modifs_multiomics_count_table_formatted.tsv  
 - Final_18_strains_with_strainN.saf  
 
-Data cleaning and normalization. Genomes were annotated with the KEGG database using BlastKOALA (Kanehisa et al. 2016).
-
+__Overview:__  
+Filtering, normalization and formatting of multiomics sequencing data.  
+Genomes were annotated with the KEGG database using BlastKOALA (Kanehisa et al. 2016).  
+This script outputs a table which will be used as the input for the subsequent scripts ('write' command at the end of the script must be enabled).  
 
 ***
 
 ### 2.SynCom_Guild_classification_Competition_prediction.Rmd  
 
 __Input File(s):__  
-- output from previous script: 1.multiomics_customindex_dataprep.Rmd
+- Output from previous script: 1.multiomics_customindex_dataprep.Rmd
 
-Translational Efficiency (TE) was calculated and Guild-Based Microbiome Classification was performed based on TE. Figures 1b, 1c, 2c, 2d were generated. Supplementary Table S1 and Supplementary Figures S2 and S4 were also generated.
-
-
+__Overview:__  
+Guild-Based Microbiome Classification algorithm. Guilds classify microbes based the metabolic pathways they prioritize, according to Translational Efficiency (TE = metaRibo-Seq / metaRNA-Seq) measurements.  
+This script produces manuscript figures 1b, 1c, 2c, 2d, as well as several supplementary figures and tables. 
 
 
 ***
 
 ### 3.Dropout_SynCom_Expt1_metaG_taxonomic_abundances.Rmd
-##### Input File(s): Output from script 1
+
+__Input File(s):__ 
+- Output from previous script: 1.multiomics_customindex_dataprep.Rmd
+
+__Overview:__  
 
 Predicting community microbe interactions in soil (competitions and dropouts). Figure 2b and part of Figure 2e and Supplementary Figures S1a and S6 were generated.
 
