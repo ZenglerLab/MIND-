@@ -18,7 +18,7 @@ Multi-omics analysis included:
 
 This directory includes statistical analysis of SynCom multiomics sequencing data, notably __Microbial Guilds Classification__ and __prediction of competition__ interactions between SynCm members.  
 
-It also contains statistical analysis of multiomics and metagenomics sequencing data of experimental dropout experiments used to validate guild-based competition predictions.  
+It also contains statistical analysis of multiomics and metagenomics sequencing data of __experimental dropout__ experiments used to validate guild-based competition predictions.  
 
 
 ### Bioinformatics processing overview  
@@ -32,8 +32,6 @@ Data tables used in this directory were obtained through bioinformatic processin
 
 ### 1.multiomics_customindex_dataprep.Rmd  
 
-This script performs filtering, normalization and formatting of count tables obtained after bioinformatic processing of multi-omics sequencing data.  
-
 __Input File(s):__  
 - Final_18_strains_with_strainN.saf  
 - 18_strains_genenames.txt  
@@ -42,8 +40,8 @@ __Input File(s):__
 - Final_18_strains_with_strainN.saf  
 
 __Overview:__  
-Filtering, normalization and formatting of multiomics sequencing data.  
-Genomes were annotated with the KEGG database using BlastKOALA (Kanehisa et al. 2016).  
+Filtering, normalization and formatting of count tables obtained after bioinformatic processing of multi-omics sequencing data.  
+This dataset contains multiomics count table from the SynCom, as well as a first round of single-member dropout experiments carried out in the SynCom.  
 This script outputs a table which will be used as the input for the subsequent scripts ('write' command at the end of the script must be enabled).  
 
 
@@ -53,8 +51,11 @@ __Input File(s):__
 - Output from previous script: 1.multiomics_customindex_dataprep.Rmd
 
 __Overview:__  
-Guild-Based Microbiome Classification algorithm. Guilds classify microbes based the metabolic pathways they prioritize, according to Translational Efficiency (TE = metaRibo-Seq / metaRNA-Seq) measurements.  
-This script produces manuscript figures 1b, 1c, 2c, 2d, as well as several supplementary figures and tables. 
+__Guild-Based Microbiome Classification algorithm__. Guilds classify microbes based the metabolic pathways they prioritize, according to Translational Efficiency (TE = metaRibo-Seq / metaRNA-Seq) measurements.  
+
+Guild classification allowed to calculate a __competition score__ and __predict competition__ between SynCom members.  
+
+This script produces manuscript Figures 1b, 1c, 2c, 2d, as well as several supplementary figures and tables. 
 
 
 ### 3.Dropout_SynCom_Expt1_metaG_taxonomic_abundances.Rmd
@@ -63,27 +64,36 @@ __Input File(s):__
 - Output from previous script: 1.multiomics_customindex_dataprep.Rmd
 
 __Overview:__  
+Statistical analysis of experimental dropout experiments results (first experiment).  
+To test guild-based predicted competitive interactions, we experimentally dropped out individual members from the SynCom and evaluated the effect on relative abundance of the remaining 15 members.  
 
-Predicting community microbe interactions in soil (competitions and dropouts). Figure 2b and part of Figure 2e and Supplementary Figures S1a and S6 were generated.
-
-
+This script produces manuscript Figure 2e (subset) and Supp. Fig. S6. 
 
 
 ***
 
 ### 4.metaG_customindex_abundances_second_dropout_experiment_dataprep.Rmd
-##### Input File(s): Dropout_expt2_Syncom_metaG_count_table.tsv, Final_18_strains_with_strainN.saf
 
-Data cleaning and normalization of experimental results of community microbe interactions in soil (competitions and dropouts).
+__Input File(s):__  
+- Dropout_expt2_Syncom_metaG_count_table.tsv  
+- Final_18_strains_with_strainN.saf  
 
+__Overview:__  
+Filtering, normalization and formatting of count tables obtained after bioinformatic processing of metagenomics sequencing data.  
+This new dataset contains results of a second round of experimental dropout experiments carried out in the SynCom (single- and double-member dropout). 
 
 
 
 ***
 
 ### 5.metaG_customindex_abundances_second_dropout_experiment.Rmd
-##### Input File(s): Output from script 4
 
-Experimental community microbal competition and dropout results were analyzed. Figure 2e and Supplementary Figures S7h and S7d were generated.
+__Input File(s):__ 
+- Output from previous script: 4.metaG_customindex_abundances_second_dropout_experiment_dataprep.Rmd
 
+__Overview:__  
+Statistical analysis of experimental dropout experiments results (second experiment).  
+To test guild-based predicted competitive interactions, we experimentally dropped out one or two individual members from the SynCom and evaluated the effect on relative abundance of the remaining members.  
+
+This script produces manuscript Figure 2e (subset) and Supp. Fig. S7 a, d, e, h. 
 
