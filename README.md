@@ -54,5 +54,11 @@ install.packages(c("stringr", "ggplot2", "FactoMineR", "factoextra", "reshape", 
 
 ***
 
-# Citations
+# Citations  
+
+If you use the code or methods presented in this repository or associated manuscript, please cite:  
+
+Moyne et _al_, 2023. Guild and Niche Determination Enables Targeted Alteration of the Microbiome. _Submitted to Nature_.  
+
+
 
