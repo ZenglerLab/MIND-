@@ -36,16 +36,23 @@ __2. Microbial Niche Determination and Prediction of Substrate Preferences in a 
 This section contains scripts and data used to perform __Microbial Niche Determination (MiND)__ and __predict substrate preferences__ in a 16-member synthetic community (SynCom) based on TE.  
 It also contains results of experimental results of experimental prebiotic experiments used to validate niches-based predictions of substrate preferences.  
 
+## Versions  
 
+These analyses were performed under Linux, Ubuntu 18.04.6 LTS using R version 3.6.3 and Rstudio version 1.4.1717. 
 
+## Dependencies
 
+To run these scripts, user needs to install R and Rstudio on their computer. Follow installation instructions here: https://rstudio-education.github.io/hopr/starting.html).  
 
-## System Requirements and versions  
+Users should also install the following packages prior to running these scripts. From a ```R``` session, run:  
 
-## Installation Guide  
-
-## Workflow
+```
+install.packages(c("stringr", "ggplot2", "FactoMineR", "factoextra", "reshape", "reshape2", "gplots", "scales", "ggpubr", "cowplot", "svglite"))
+```
 
 ## License
 
+***
+
+# Citations
 
