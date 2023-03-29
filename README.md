@@ -10,7 +10,7 @@ This repository contains scripts associated to the following manuscript:
 
 <p align ="center">Oriane Moyne, Mahmoud Al-Bassam, Chloe Lieng, Deepan Thiruppathy, Grant J. Norton, Manish Kumar, Eli Haddad, Livia S. Zaramela, Karsten Zengler</p>
 
-<p align ="center">Departments of Pediatrics and Bioengineering, Center for Microbiome Innovation,</p>  <p align ="center">University of California, San Diego, La Jolla, California, USA</p>
+<p align ="center">Departments of Pediatrics and Bioengineering, Center for Microbiome Innovation</p>  <p align ="center">University of California, San Diego, La Jolla, California, USA</p>
 
 ***  
 
@@ -51,6 +51,8 @@ install.packages(c("stringr", "ggplot2", "FactoMineR", "factoextra", "reshape", 
 ```
 
 ## License
+
+This repository is covered under GNU GENERAL PUBLIC LICENSE version 3.
 
 ***
 
