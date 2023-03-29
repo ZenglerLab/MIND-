@@ -12,6 +12,8 @@ This repository contains scripts associated to the following manuscript:
 
 <p align ="center">Departments of Pediatrics and Bioengineering, Center for Microbiome Innovation</p>  <p align ="center">University of California, San Diego, La Jolla, California, USA</p>
 
+<p align ="center">_Submitted to the journal Nature in 2023_</p>
+
 ***  
 
 ## Paper contents
