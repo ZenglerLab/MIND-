@@ -1,0 +1,418 @@
+---
+title: "Import proteins"
+author: "Oriane Moyne"
+date: "6/13/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(gplots)
+library(svglite)
+```
+
+# Samples description
+
+Multi-omics: metagenomics (metaG), metatranscriptomics (metaT), metaRibo-Seq (metaRS) analysis of 4-days (T1) and 7-days (T2) growth SynCom.  
+
+- X1 and X2 samples: Full SynCom (16 strains)  
+- X3: SynCom - _Lysobacter_ dropout
+- X4: SynCom - _Mucilaginibacter_ dropout
+- X5: SynCom - _Burkholderia_ dropout
+- X6: SynCom - _Burkholderia_, _Rhizobium_, _Rhodocccus_, _Brevibacillus_ dropout.  
+
+In this script, we will analyze multiomics signal measured in the Full SynCom samples on import protein, after 7 days of growth (T2). 
+
+# Data import 
+
+## Genes data
+
+```{r}
+# Count tables with taxonomy annotations (Woltka gotu output)
+syncom <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/Syncom_formatted_filtered_corrected_RPKM.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "")
+
+# filter out very low counts (optional)
+#syncom[, 3:ncol(syncom)][syncom[, 3:ncol(syncom)]<1] <- 0
+syncom$genus_strain <- str_split(syncom$genus_strain, "_", simplify = TRUE)[,1]
+
+syncom <- syncom[!syncom$genus_strain%in%c("Bacillus", "Terrabacter"), ]
+syncom$genus_strain[syncom$genus_strain == "Chitinophagaceae"] <- "Niastella"
+```
+
+### Aggregate table by gene name
+
+```{r}
+syncom <- aggregate(syncom[, 5:ncol(syncom)], by = list(syncom$gene_name, syncom$genus_strain), sum)
+syncom <- syncom[syncom$Group.1 != "hypothetical protein", ]
+
+colnames(syncom) <- c("gene_name", "genus_strain", colnames(syncom)[3:ncol(syncom)])
+```
+
+# Calculate Translational Efficiency (TE)
+
+```{r, eval = TRUE}
+# Create separate matrices for each omic
+metaG_mat <- syncom[, str_detect(colnames(syncom), "metaG")]
+metaT_mat <- syncom[, str_detect(colnames(syncom), "metaT")]
+metaRS_mat <- syncom[, str_detect(colnames(syncom), "metaRS")]
+
+## Order them the same
+colnames(metaG_mat) <- str_split(colnames(metaG_mat), "_meta", simplify = TRUE)[,1]
+colnames(metaT_mat) <- str_split(colnames(metaT_mat), "_meta", simplify = TRUE)[,1]
+colnames(metaRS_mat) <- str_split(colnames(metaRS_mat), "_meta", simplify = TRUE)[,1]
+metaT_mat <- metaT_mat[, colnames(metaG_mat)]
+metaRS_mat <- metaRS_mat[, colnames(metaG_mat)]
+
+TE_mat <- metaRS_mat / metaT_mat
+colnames(TE_mat) <- paste(colnames(TE_mat), "TE", sep = "_")
+
+colnames(metaG_mat) <- paste(colnames(metaG_mat), "metaG", sep = "_")
+colnames(metaT_mat) <- paste(colnames(metaT_mat), "metaT", sep = "_")
+colnames(metaRS_mat) <- paste(colnames(metaRS_mat), "metaRS", sep = "_")
+
+# NaN produced when 0/0
+TE_mat[is.na(TE_mat)] <- 0
+
+# Inf produced when x/0
+is.na(TE_mat) <- sapply(TE_mat, is.infinite)
+TE_mat[is.na(TE_mat)] <- 0
+
+TE_syncom <- data.frame(cbind(syncom[, 1:2], TE_mat))
+```
+
+# Microbial Niche Determination (MiND)
+
+Microbial Niche Determination is being performed by analyzing TE data on genes coding for import proteins.  
+
+If a bacterium has a high TE for the import protein of a particular substrate, it would indicate that this bacterium prioritizes import of this substrate. This would indentify each bacteria's preferred substrates, i.e. their niche.  
+
+```{r}
+TE_import <- TE_syncom[str_detect(TE_syncom$gene_name, "take")|str_detect(TE_syncom$gene_name, "import"), colnames(TE_syncom)%in%c("X1_1_T2_TE", "X1_2_T2_TE","X2_1_T2_TE", "X2_2_T2_TE")] #test
+TE_import <- apply(TE_import, 1, mean)
+TE_import <- data.frame(cbind(TE_syncom[str_detect(TE_syncom$gene_name, "take")|str_detect(TE_syncom$gene_name, "import"), c("gene_name", "genus_strain")], TE_import))  #test
+
+
+TE_import <- reshape(TE_import,
+        direction = "wide", 
+        idvar = "genus_strain", 
+        timevar = "gene_name")
+
+TE_import[is.na(TE_import)] <- 0
+
+rownames(TE_import) <- TE_import$genus_strain
+TE_import <- TE_import[, !colnames(TE_import) == "genus_strain"]
+
+colnames(TE_import) <- str_replace(colnames(TE_import), "TE_import.", "")
+
+TE_import <- TE_import[, colnames(TE_import)%in%colnames(TE_import)]
+
+ncol( TE_import[, apply(TE_import, 2, sum)!=0])
+
+# Same order than guild clustering
+TE_import$Tax <- rownames(TE_import)
+TE_import$Tax <- ordered(TE_import$Tax, levels = c("Paenibacillus", "Bosea", "Brevibacillus", "Marmoricola", "Methylobacterium",
+                                                      "Niastella", "Arthrobacter", "Bradyrhizobium", "Lysobacter", "Burkholderia","Rhizobium",  
+                                                      "Variovorax", "Rhodococcus",
+                                                      "Chitinophaga", "Mucilaginibacter",
+                                                       "Mycobacterium"))
+   
+TE_import <- TE_import[order(TE_import$Tax), ]
+TE_import <- TE_import[, colnames(TE_import)!="Tax"]
+
+TE_import <- data.frame(t(TE_import))
+TE_import$gene <- rownames(TE_import)
+TE_import <- TE_import[sort(TE_import$gene), ]
+TE_import <- TE_import[, colnames(TE_import) != "gene"]
+```
+
+Set up clustering and distances functions
+
+```{r}
+hclustfunc <- function(x) hclust(x, method="ward.D2") # clustering ward
+distfunc <- function(x) dist(x, method="euclidean")   # euclidean distances 
+```
+
+Create custom color palette
+
+```{r}
+cool = rainbow(50, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
+warm = rainbow(50, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
+cols = c(rev(cool),  rev(warm))
+
+mypalette <- colorRampPalette(c("lightyellow1", rev(warm)))(21)
+```
+
+Supp. Fig. S12
+
+
+```{r, fig.height=10, fig.width = 10}
+TE_import <- TE_import[apply(TE_import, 1, sum)!=0, ]
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/PREBIOTICS_EXP")
+# svg("TE_import_heatmap.svg", height = 10, width = 10)
+heatmap.2(as.matrix(log(TE_import + 0.0001)),
+          trace = "none",
+          hclustfun = hclustfunc,
+          distfun = distfunc,
+          col = mypalette,
+          scale = "none",
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(15,28),
+          lhei=c(1,6), lwid=c(1,5)
+          )
+# dev.off()
+```
+ Figure 3a : Zoom on tested compounds only, order bacteria (columns as in guild clustering)
+
+```{r, fig.height=8, fig.width = 10}
+tested <- TE_import[str_detect(rownames(TE_import), "ructose") | 
+                            str_detect(rownames(TE_import), "alactose") |
+                            str_detect(rownames(TE_import), "lutamate") |
+                            str_detect(rownames(TE_import), "ystine") |
+                            str_detect(rownames(TE_import), "utrescine") |
+                            str_detect(rownames(TE_import), "altose") |
+                            str_detect(rownames(TE_import), "ethionine") |
+                            str_detect(rownames(TE_import), "ibose") |
+                            str_detect(rownames(TE_import), "ulfate") |
+                            str_detect(rownames(TE_import), "rehalose") |
+                            str_detect(rownames(TE_import), "B12") |
+                            str_detect(rownames(TE_import), "ylose") |
+                            str_detect(rownames(TE_import), "permidine") |
+                            str_detect(rownames(TE_import), "tathione")
+                            , ]
+
+# Ordered as in guild clustering for Fig. 3 a
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/PREBIOTICS_EXP")
+# svg("TE_import_heatmap_testedonly_soilSCclusteringorder.svg", height = 8, width = 10)
+heatmap.2(as.matrix(log(tested +1)),
+          trace = "none",
+          hclustfun = hclustfunc,
+          distfun = distfunc,
+          col = mypalette,
+          scale = "none",
+          Rowv = FALSE,
+          Colv = FALSE,
+          margins=c(15,25),
+          lhei=c(1.5,6), lwid=c(1,5)
+          )
+# dev.off()
+```
+
+## What did import proteins coverage look like at each -omic level?
+
+Metagenomic, metatranscriptomics, metaRibo-Seq. Supp. Fig. S11. 
+
+### Metagenomics level
+
+```{r}
+metaG_syncom <- syncom[, str_detect(colnames(syncom), "metaG")|colnames(syncom) == "gene_name"|colnames(syncom) == "genus_strain"]
+metaG_import <- metaG_syncom[str_detect(metaG_syncom$gene_name, "take")|str_detect(metaG_syncom$gene_name, "import"), colnames(metaG_syncom)%in%c("X1_1_T2_metaG", "X1_2_T2_metaG","X2_1_T2_metaG", "X2_2_T2_metaG")] #test
+
+metaG_import <- apply(metaG_import, 1, function(x)mean(x, na.rm = TRUE))
+
+metaG_import <- data.frame(cbind(metaG_syncom[str_detect(metaG_syncom$gene_name, "take")|str_detect(metaG_syncom$gene_name, "import"), c("gene_name", "genus_strain")], metaG_import))  #test
+
+metaG_import <- reshape(metaG_import,
+        direction = "wide", 
+        idvar = "genus_strain", 
+        timevar = "gene_name")
+
+metaG_import[is.na(metaG_import)] <- 0
+
+rownames(metaG_import) <- metaG_import$genus_strain
+metaG_import <- metaG_import[, !colnames(metaG_import) == "genus_strain"]
+
+metaG_import <- metaG_import[, apply(metaG_import, 2, sum)!=0]
+
+colnames(metaG_import) <- str_replace(colnames(metaG_import), "metaG_import.", "")
+
+# Same order than guild clustering
+metaG_import$Tax <- rownames(metaG_import)
+metaG_import$Tax <- ordered(metaG_import$Tax , levels = rev(c("Mycobacterium", "Marmoricola", "Paenibacillus", "Chitinophaga", "Mucilaginibacter",  "Bosea",  "Methylobacterium",
+                        "Rhizobium", "Bradyrhizobium", "Rhodococcus", "Variovorax",
+                                                     "Burkholderia", "Niastella", 
+                                                    "Lysobacter", "Arthrobacter", "Brevibacillus"
+                                                )))
+
+metaG_import <- metaG_import[order(metaG_import$Tax), ]
+metaG_import <- metaG_import[, colnames(metaG_import) != "Tax"]
+
+metaG_import <- data.frame(t(metaG_import))
+metaG_import$gene <- rownames(metaG_import)
+metaG_import <- metaG_import[sort(metaG_import$gene), ]
+metaG_import <- metaG_import[, colnames(metaG_import) != "gene"]
+```
+
+```{r, fig.height=15, fig.width = 10}
+#  setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/PREBIOTICS_EXP")
+ # svg("metaG_import_heatmap_5PCs.svg", height = 15, width = 10)
+                        heatmap.2(as.matrix(metaG_import),
+                                  trace = "none",
+                                  hclustfun = hclustfunc,
+                                  distfun = distfunc,
+                                  col = bluered,
+                                  scale = "row",
+                                  Rowv = FALSE,
+                                  Colv = FALSE,
+                                  margins=c(10,25),
+                                  lhei=c(1,8), lwid=c(1,5),
+labCol=as.expression(lapply(colnames(metaG_import), function(a) bquote(italic(.(a)))))
+                                  )
+#  dev.off()
+```
+
+## Metatranscriptomics level
+
+
+```{r}
+metaT_syncom <- syncom[, str_detect(colnames(syncom), "metaT")|colnames(syncom) == "gene_name"|colnames(syncom) == "genus_strain"]
+metaT_import <- metaT_syncom[str_detect(metaT_syncom$gene_name, "take")|str_detect(metaT_syncom$gene_name, "import"), colnames(metaT_syncom)%in%c("X1_1_T2_metaT", "X1_2_T2_metaT","X2_1_T2_metaT", "X2_2_T2_metaT")] #test
+metaT_import <- apply(metaT_import, 1, function(x)mean(x, na.rm = TRUE))
+
+metaT_import <- data.frame(cbind(metaT_syncom[str_detect(metaT_syncom$gene_name, "take")|str_detect(metaT_syncom$gene_name, "import"), c("gene_name", "genus_strain")], metaT_import))  #test
+
+metaT_import <- reshape(metaT_import,
+        direction = "wide", 
+        idvar = "genus_strain", 
+        timevar = "gene_name")
+
+metaT_import[is.na(metaT_import)] <- 0
+
+rownames(metaT_import) <- metaT_import$genus_strain
+metaT_import <- metaT_import[, !colnames(metaT_import) == "genus_strain"]
+
+#metaT_import <- metaT_import[apply(metaT_import, 1, sum)!=0, ]
+#metaT_import <- metaT_import[, apply(metaT_import, 2, sum)!=0]
+
+ncol(metaT_import[, apply(metaT_import, 2, sum)!=0])
+
+colnames(metaT_import) <- str_replace(colnames(metaT_import), "metaT_import.", "")
+metaT_import <- metaT_import[, colnames(metaT_import)%in%rownames(metaG_import)]
+
+# Same order than guild clustering
+metaT_import$Tax <- rownames(metaT_import)
+metaT_import$Tax <- ordered(metaT_import$Tax, levels = rev(c("Mycobacterium", "Marmoricola", "Paenibacillus", "Chitinophaga", "Mucilaginibacter",  "Bosea",  "Methylobacterium",
+                        "Rhizobium", "Bradyrhizobium", "Rhodococcus", "Variovorax",
+                                                     "Burkholderia", "Niastella", 
+                                                    "Lysobacter", "Arthrobacter", "Brevibacillus"
+                                                )))
+                            
+                            
+metaT_import <- metaT_import[order(metaT_import$Tax), ]
+metaT_import <- metaT_import[, colnames(metaT_import)!="Tax"]
+
+metaT_import <- data.frame(t(metaT_import))
+metaT_import$gene <- rownames(metaT_import)
+metaT_import <- metaT_import[sort(metaT_import$gene), ]
+metaT_import <- metaT_import[, colnames(metaT_import) != "gene"]
+```
+
+```{r, fig.height=15, fig.width = 10}
+ 
+#  setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/PREBIOTICS_EXP")
+ # svg("metaT_import_heatmap_5PCs.svg", height = 15, width = 10)
+                        heatmap.2(as.matrix(metaT_import),
+                                  trace = "none",
+                                  hclustfun = hclustfunc,
+                                  distfun = distfunc,
+                                  col = bluered,
+                                  scale = "row",
+                                  Rowv = FALSE,
+                                  Colv = FALSE,
+                                  margins=c(10,25),
+                                  lhei=c(1,8), lwid=c(1,5),
+labCol=as.expression(lapply(colnames(metaT_import), function(a) bquote(italic(.(a)))))
+                                  )
+#  dev.off()
+```
+
+
+## MetaRibo-Seq level
+
+
+```{r}
+metaRS_syncom <- syncom[, str_detect(colnames(syncom), "metaRS")|colnames(syncom) == "gene_name"|colnames(syncom) == "genus_strain"]
+metaRS_import <- metaRS_syncom[str_detect(metaRS_syncom$gene_name, "take")|str_detect(metaRS_syncom$gene_name, "import"), colnames(metaRS_syncom)%in%c("X1_1_T2_metaRS", "X1_2_T2_metaRS","X2_1_T2_metaRS", "X2_2_T2_metaRS")] #test
+metaRS_import <- apply(metaRS_import, 1, function(x)mean(x, na.rm = TRUE))
+
+metaRS_import <- data.frame(cbind(metaRS_syncom[str_detect(metaRS_syncom$gene_name, "take")|str_detect(metaRS_syncom$gene_name, "import"), c("gene_name", "genus_strain")], metaRS_import))  #test
+
+metaRS_import <- reshape(metaRS_import,
+        direction = "wide", 
+        idvar = "genus_strain", 
+        timevar = "gene_name")
+
+metaRS_import[is.na(metaRS_import)] <- 0
+#metaRS_import[metaRS_import<1] <- 0
+
+rownames(metaRS_import) <- metaRS_import$genus_strain
+metaRS_import <- metaRS_import[, !colnames(metaRS_import) == "genus_strain"]
+
+#metaRS_import <- metaRS_import[apply(metaRS_import, 1, sum)!=0, ]
+#metaRS_import <- metaRS_import[, apply(metaRS_import, 2, sum)!=0]
+#metaRS_import <- metaRS_import[, apply(metaRS_import, 2, sum)>1]
+
+colnames(metaRS_import) <- str_replace(colnames(metaRS_import), "metaRS_import.", "")
+metaRS_import <- metaRS_import[, colnames(metaRS_import)%in%rownames(metaG_import)]
+
+
+# Same order than guild clustering
+metaRS_import$Tax <- rownames(metaRS_import)
+metaRS_import$Tax <- ordered(metaRS_import$Tax, levels = rev(c("Mycobacterium", "Marmoricola", "Paenibacillus", "Chitinophaga", "Mucilaginibacter",  "Bosea",  "Methylobacterium",
+                        "Rhizobium", "Bradyrhizobium", "Rhodococcus", "Variovorax",
+                                                     "Burkholderia", "Niastella", 
+                                                    "Lysobacter", "Arthrobacter", "Brevibacillus"
+                                                )))
+metaRS_import <- metaRS_import[order(metaRS_import$Tax), ]
+metaRS_import <- metaRS_import[, colnames(metaRS_import)!="Tax"]
+
+metaRS_import <- data.frame(t(metaRS_import))
+metaRS_import$gene <- rownames(metaRS_import)
+metaRS_import <- metaRS_import[sort(metaRS_import$gene), ]
+metaRS_import <- metaRS_import[, colnames(metaRS_import) != "gene"]
+```
+
+```{r, fig.height=15, fig.width = 10}
+ 
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/PREBIOTICS_EXP")
+# svg("metaRS_import_heatmap_5PCs.svg", height = 15, width = 10)
+                       heatmap.2(as.matrix(metaRS_import),
+                                 trace = "none",
+                                 hclustfun = hclustfunc,
+                                 distfun = distfunc,
+                                 col = bluered,
+                                 scale = "row",
+                                 Rowv = FALSE,
+                                 Colv = FALSE,
+                                 margins=c(10,25),
+                                 lhei=c(1,8), lwid=c(1,5),
+labCol=as.expression(lapply(colnames(metaRS_import), function(a) bquote(italic(.(a)))))
+                                 )
+# dev.off()
+```
+
+
+
+
+
+
