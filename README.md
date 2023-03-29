@@ -1,6 +1,6 @@
 ***
 
-# Microbial guilds and Niche Determination (MiND)
+# Microbial guilds and Niche Determination (G-MiND)
 
 This repository contains scripts associated to the following manuscript:  
 
