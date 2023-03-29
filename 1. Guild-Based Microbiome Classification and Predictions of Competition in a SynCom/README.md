@@ -7,6 +7,9 @@ _Note: Before running these scripts, users should modify the path of any data ta
 
 ## Overview
 
+This section contains scripts and data used to determine __microbial guilds__ and __predict competition__ in a 16-member synthetic community (SynCom) based on translational efficiency (TE = metaRibo-Seq / metaRNA-Seq).  
+It also contains results of experimental dropout experiments used to validate guild-based predictions of competition interactions.  
+
 ### Experiment overview  
 
 Multi-omics analysis of a 16-member synthetic community (SynCom) grown in complex medium (see Moyne et _al._, 2023 manuscript for details).  
@@ -16,7 +19,7 @@ Multi-omics analysis included:
 - metatranscriptomics (metaT)  
 - metaRibo-Seq (metaRS)  
 
-This directory includes statistical analysis of SynCom multiomics sequencing data, notably __Microbial Guilds Classification__ and __prediction of competition__ interactions between SynCm members.  
+This directory includes statistical analysis of SynCom multiomics sequencing data, notably __Microbial Guilds Classification__ and __prediction of competition__ interactions between SynCom members.  
 
 It also contains statistical analysis of multiomics and metagenomics sequencing data of __experimental dropout__ experiments used to validate guild-based competition predictions.  
 
