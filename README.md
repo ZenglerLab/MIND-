@@ -1,6 +1,6 @@
 ***
 
-# Microbial guilds and Niche Determination (G-MiND)
+# Guild-based microbiome Classification and Microbial and Niche Determination (GC-MiND)
 
 This repository contains scripts associated to the following manuscript (_Submitted to the journal Nature in 2023_):  
 
@@ -16,7 +16,11 @@ This repository contains scripts associated to the following manuscript (_Submit
 
 ## Paper contents
 
-In this study, we present a new approach that integrates transcription and translation measurements to predict competition and substrate preferences within microbial communities, consequently enabling the selective manipulation of the microbiome. By performing metatranscriptomic (metaRNA-Seq) and metatranslatomic (metaRibo-Seq) analysis in complex samples, we classified microbes into functional groups (i.e. guilds) and demonstrated that members of the same guild are competitors. Furthermore, we predicted preferred substrates based on importer proteins, which specifically benefited selected microbes in the community (i.e. their niche) and simultaneously impaired their competitors. 
+In this study, we present a new approach that integrates transcription and translation measurements to __predict competition and substrate preferences__ within microbial communities, consequently __enabling selective manipulation of the microbiome__.  
+
+By performing metatranscriptomic (metaRNA-Seq) and metatranslatomic (metaRibo-Seq) analysis in complex samples, we classified microbes into __functional groups__ (i.e. __guilds__) and demonstrated that __members of the same guild are competitors__.  
+
+Then, we predicted __preferred substrates__ based on metaRNA-Seq and metaRibo-Seq signal on importer proteins, which specifically benefited selected microbes in the community (i.e. their __niche__) and simultaneously impaired their guild competitors. 
 
 ***
 
