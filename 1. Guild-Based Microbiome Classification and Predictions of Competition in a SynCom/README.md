@@ -68,7 +68,7 @@ __Input File(s):__
 
 __Overview:__  
 Statistical analysis of experimental dropout experiments results (first experiment).  
-To test guild-based predicted competitive interactions, we experimentally dropped out individual members from the SynCom and evaluated the effect on relative abundance of the remaining 15 members.  
+To test guild-based predicted competitive interactions, we experimentally dropped out individual members from the SynCom and evaluated the effect on metagenomics relative abundance of the remaining 15 members.  
 
 This script produces manuscript Figure 2e (subset) and Supp. Fig. S6. 
 
@@ -98,7 +98,7 @@ __Input File(s):__
 
 __Overview:__  
 Statistical analysis of experimental dropout experiments results (second experiment).  
-To test guild-based predicted competitive interactions, we experimentally dropped out one or two individual members from the SynCom and evaluated the effect on relative abundance of the remaining members.  
+To test guild-based predicted competitive interactions, we experimentally dropped out one or two individual members from the SynCom and evaluated the effect on metagenomics relative abundance of the remaining members.  
 
 This script produces manuscript Figure 2e (subset) and Supp. Fig. S7 a, d, e, h. 
 
