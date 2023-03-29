@@ -2,7 +2,7 @@
 
 # Microbial guilds and Niche Determination (G-MiND)
 
-This repository contains scripts associated to the following manuscript:  
+This repository contains scripts associated to the following manuscript (_Submitted to the journal Nature in 2023_):  
 
 ***
 
@@ -11,8 +11,6 @@ This repository contains scripts associated to the following manuscript:
 <p align ="center">Oriane Moyne, Mahmoud Al-Bassam, Chloe Lieng, Deepan Thiruppathy, Grant J. Norton, Manish Kumar, Eli Haddad, Livia S. Zaramela, Karsten Zengler</p>
 
 <p align ="center">Departments of Pediatrics and Bioengineering, Center for Microbiome Innovation</p>  <p align ="center">University of California, San Diego, La Jolla, California, USA</p>
-
-<p align ="center">_Submitted to the journal Nature in 2023_</p>
 
 ***  
 
