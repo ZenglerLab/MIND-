@@ -51,7 +51,7 @@ To run these scripts, user needs to install R and Rstudio on their computer. Fol
 Users should also install the following packages prior to running these scripts. From a ```R``` session, run:  
 
 ```
-install.packages(c("stringr", "ggplot2", "FactoMineR", "factoextra", "reshape", "reshape2", "gplots", "scales", "ggpubr", "cowplot", "svglite"))
+install.packages(c("stringr", "ggplot2", "FactoMineR", "factoextra", "reshape", "reshape2", "gplots", "scales", "ggpubr", "cowplot", "svglite", "dendextend", "RColorBrewer"))
 ```
 
 ## License
