@@ -6,7 +6,7 @@ This repository contains scripts associated to the following manuscript (_Submit
 
 ***
 
-<h4> <p align ="center">Guild and Niche Determination Enables Targeted Alteration of the Microbiome</p> </h4>
+<h4> <p align ="center">Guild and Niche Determination Enable Targeted Alteration of the Microbiome</p> </h4>
 
 <p align ="center">Oriane Moyne, Mahmoud Al-Bassam, Chloe Lieng, Deepan Thiruppathy, Grant J. Norton, Manish Kumar, Eli Haddad, Livia S. Zaramela, Karsten Zengler</p>
 
