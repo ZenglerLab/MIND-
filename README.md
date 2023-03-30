@@ -30,12 +30,12 @@ This repository contains data and code used to analyze data and produce figures 
 
 The repository is divided in subdirectories, which follow the overall outline of the paper. Namely:  
 
-__1. Guild-based Microbiome Classification and Prediction of Competition in a SynCom__  
+__1. Guild-based Microbiome Classification and Prediction of Competition (GC)__  
 
 This section contains scripts and data used to determine __microbial guilds__ and __predict competition__ in a 16-member synthetic community (SynCom) based on translational efficiency (TE = metaRibo-Seq / metaRNA-Seq).  
 It also contains results of experimental dropout experiments used to validate guild-based predictions of competition interactions.  
 
-__2. Microbial Niche Determination and Prediction of Substrate Preferences in a SynCom__  
+__2. Microbial Niche Determination and Prediction of Substrate Preferences (MiND)__  
 
 This section contains scripts and data used to perform __Microbial Niche Determination (MiND)__ and __predict substrate preferences__ in a 16-member synthetic community (SynCom) based on TE.  
 It also contains results of experimental results of experimental prebiotic experiments used to validate niches-based predictions of substrate preferences.  
