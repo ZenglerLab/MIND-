@@ -84,17 +84,6 @@ syncom[str_detect(syncom$FeatureID, "NCLMAKNM"), ]$genus_strain <- "Terrabacter_
 syncom <- syncom[, c(1, ncol(syncom), 2:(ncol(syncom)-1))]
 ```
 
-## Barplot sequencing depth
-
-```{r, fig.width = 25, fig.height = 4}
-summary(apply(syncom[, 3:ncol(syncom)], 2, sum))
-barplot(apply(syncom[, 3:ncol(syncom)][, str_detect(colnames(syncom[, 3:ncol(syncom)]), "metaG")], 2, sum))
-barplot(apply(syncom[, 3:ncol(syncom)][, str_detect(colnames(syncom[, 3:ncol(syncom)]), "metaT")], 2, sum))
-barplot(apply(syncom[, 3:ncol(syncom)][, str_detect(colnames(syncom[, 3:ncol(syncom)]), "metaRS")], 2, sum))
-
-barplot(apply(syncom[, 3:ncol(syncom)], 2, sum), las = 2)
-```
-
 ## Discard bad sample: 1_2_T2_metaG
 
 ```{r}
@@ -133,10 +122,6 @@ syncom <- merge(saf[, c(1, ncol(saf))], syncom, by.x = "GeneID", by.y = "Feature
 
 # Data Cleaning
 
-
-
-## tRNAs??
-
 ```{r}
 # Information extracted from ffn file
 metadata <- read.delim("/home/moyne/Moyne_disk/Soil_project/Final_datasets/18_strains_genenames.txt", 
@@ -157,13 +142,6 @@ metadata <- metadata[, c("gene", "gene_name")]
 
 ```{r}
 syncom <- merge(metadata, syncom, by.x = "gene", by.y = "GeneID")
-```
-
-```{r}
-syncom <- syncom[str_detect(syncom$gene_name, "tRNA", negate = TRUE)&syncom$gene_len>100, ]
-syncom <- syncom[str_detect(syncom$gene_name, "tRNA", negate = TRUE)&str_detect(syncom$gene_name, "S ribosomal RNA", negate = TRUE)&str_detect(syncom$gene_name, "transfer-messenger RNA", negate = TRUE), ]
-
-summary(syncom$gene_len)
 ```
 
 
@@ -219,7 +197,7 @@ syncom <- data.frame(cbind(syncom[, 1:4], metaG_mat, metaT_mat, metaRS_mat))
 
 Negative controls:  
 
-_Terrabacter_ and _Bacillus_ are present in the genome database, but absent from the SynCom. They should have the lowest read number in the community (noise only).  
+_Terrabacter_ and _Bacillus_ are present in the genome database, but absent from the SynCom (negative controls). They should have the lowest read number in the community.  
 
 
 ```{r, eval = TRUE}
