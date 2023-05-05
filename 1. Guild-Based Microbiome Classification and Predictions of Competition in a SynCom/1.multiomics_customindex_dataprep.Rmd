@@ -84,7 +84,6 @@ syncom[str_detect(syncom$FeatureID, "NCLMAKNM"), ]$genus_strain <- "Terrabacter_
 syncom <- syncom[, c(1, ncol(syncom), 2:(ncol(syncom)-1))]
 ```
 
-## Discard bad sample: 1_2_T2_metaG
 
 ```{r}
 syncom[, colnames(syncom)=="1_2_T2_metaG"] <- 0
