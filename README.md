@@ -1,14 +1,11 @@
 ***
 
-# Guild-based microbiome Classification and Microbial and Niche Determination (GC-MiND)
+# Microbial Interaction and Niche Determination (MIND) Enable Targeted Alteration of the Microbiome
 
-This repository contains scripts associated to the following manuscript (_Submitted to the journal Nature in 2023_):  
 
 ***
 
-<h4> <p align ="center">Guild and Niche Determination Enable Targeted Alteration of the Microbiome</p> </h4>
-
-<p align ="center">Oriane Moyne, Mahmoud Al-Bassam, Chloe Lieng, Deepan Thiruppathy, Grant J. Norton, Manish Kumar, Eli Haddad, Livia S. Zaramela, Karsten Zengler</p>
+<p align ="center">Oriane Moyne, Mahmoud Al-Bassam, Chloe Lieng, Deepan Thiruppathy, Grant J. Norton, Manish Kumar, Eli Haddad, Yuhan Weng, Livia S. Zaramela, Karsten Zengler</p>
 
 <p align ="center">Departments of Pediatrics and Bioengineering, Center for Microbiome Innovation</p>  <p align ="center">University of California, San Diego, La Jolla, California, USA</p>
 
@@ -18,9 +15,9 @@ This repository contains scripts associated to the following manuscript (_Submit
 
 In this study, we present a new approach that integrates transcription and translation measurements to __predict competition and substrate preferences__ within microbial communities, consequently __enabling selective manipulation of the microbiome__.  
 
-By performing metatranscriptomic (metaRNA-Seq) and metatranslatomic (metaRibo-Seq) analysis in complex samples, we classified microbes into __functional groups__ (i.e. __guilds__) and demonstrated that __members of the same guild are competitors__.  
+By performing metatranscriptomic (metaRNA-Seq) and metatranslatomic (metaRibo-Seq) analysis in complex samples, we characterized microbes into __functional profiles__ and demonstrated that __members of with similar functional profiles are competitors__.  
 
-Then, we predicted __preferred substrates__ based on metaRNA-Seq and metaRibo-Seq signal on importer proteins, which specifically benefited selected microbes in the community (i.e. their __niche__) and simultaneously impaired their guild competitors. 
+Then, we predicted __preferred substrates__ based on metaRNA-Seq and metaRibo-Seq signal on importer proteins, which specifically benefited selected microbes in the community (i.e. their __niche__) and simultaneously impaired their competitors. 
 
 ***
 
@@ -30,14 +27,14 @@ This repository contains data and code used to analyze data and produce figures 
 
 The repository is divided in subdirectories, which follow the overall outline of the paper. Namely:  
 
-__1. Guild-based Microbiome Classification and Prediction of Competition (GC)__  
+__1. TE-based Functional Profiling and Prediction of Microbial Interactions (MI)__  
 
-This section contains scripts and data used to determine __microbial guilds__ and __predict competition__ in a 16-member synthetic community (SynCom) based on translational efficiency (TE = metaRibo-Seq / metaRNA-Seq).  
-It also contains results of experimental dropout experiments used to validate guild-based predictions of competition interactions.  
+This section contains scripts and data used to determine __microbial functional profiles__ and __predict competition__ in a 16-member synthetic community (SynCom) based on translational efficiency (TE = metaRibo-Seq / metaRNA-Seq).  
+It also contains results of experimental dropout experiments used to validate MI-based predictions of competition interactions.  
 
-__2. Microbial Niche Determination and Prediction of Substrate Preferences (MiND)__  
+__2. Prediction of Substrate Preferences and Niche Determination (ND)__  
 
-This section contains scripts and data used to perform __Microbial Niche Determination (MiND)__ and __predict substrate preferences__ in a 16-member synthetic community (SynCom) based on TE.  
+This section contains scripts and data used to perform __Niche Determination (ND)__ and __predict substrate preferences__ in a 16-member synthetic community (SynCom) based on TE.  
 It also contains results of experimental results of experimental prebiotic experiments used to validate niches-based predictions of substrate preferences.  
 
 ## Versions  
@@ -60,11 +57,6 @@ This repository is covered under GNU GENERAL PUBLIC LICENSE version 3.
 
 ***
 
-# Citations  
-
-If you use the code or methods presented in this repository or associated manuscript, please cite:  
-
-Moyne et _al_, 2023. Guild and Niche Determination Enables Targeted Alteration of the Microbiome. _Submitted to Nature_.  
 
 
 
