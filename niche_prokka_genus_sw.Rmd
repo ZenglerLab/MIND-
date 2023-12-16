@@ -1,0 +1,314 @@
+---
+title: "niche_prokka"
+author: "Sherlyn Weng"
+date: "2023-09-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Load Libraries
+
+```{r}
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(scales)
+```
+
+## Data Import
+
+```{r}
+# load genes metadata
+genes_metadata <- fread("./data/genome_id_prokka.txt", sep = "\t", dec = ".", header = FALSE, stringsAsFactors = FALSE, na.strings = "", check.names = FALSE) %>% 
+  as.data.frame() %>% 
+  mutate(
+    genome_id = str_split(V1, "\\ ", simplify = TRUE)[, 1], 
+    gene_id = str_split_fixed(str_split(V1, "\\ ", simplify = TRUE)[, 2], "\\ ", n = 2)[, 1],
+    gene_name = str_split_fixed(str_split_fixed(V1, "\\ ", n = 2)[, 2], "\\ ", n = 2)[, 2],
+  ) %>% 
+  select(-V1)
+
+# load wol metadata
+genomes_metadata <- fread("./data/metadata.tsv", sep="\t", dec=".", header = TRUE, stringsAsFactors = FALSE, na.strings = "", check.names = FALSE) %>% 
+  as.data.frame() %>% 
+  select(`#genome`, genus, species, unique_name) 
+
+# load feature table
+data <- fread("./data/counts_prokka.tsv", sep="\t", dec=".", header = TRUE, stringsAsFactors = FALSE, na.strings = "",check.names = FALSE) %>% 
+  as.data.frame() %>% 
+  rename_with(~ str_replace(., "_wol_above30", ""), everything()) %>% 
+  rename_with(~ str_replace(., "mi04t", "MI04T"))
+```
+
+## Data Formatting
+
+```{r}
+metadata <- genes_metadata %>% 
+  left_join(genomes_metadata, by = c("genome_id" = "#genome"))
+
+data <- data %>% left_join(metadata, by = c("#FeatureID" = "gene_id")) %>% 
+  select(gene_name, genus, species, matches("meta"))
+```
+
+## Check Sequencig Depth
+
+# MI04T1_ref_1 1.4 million
+```{r}
+par(mar = c(15, 5, 2, 2))
+data %>% 
+  select(where(is.numeric)) %>% 
+  colSums() %>% 
+  barplot(las = 2)
+
+par(mar = c(15, 5, 2, 2))
+data %>% select(matches("metaG")) %>% colSums() %>% barplot(las = 2)
+data %>% select(matches("metaT")) %>% colSums() %>% barplot(las = 2)
+data %>% select(matches("metaRS")) %>% colSums() %>% barplot(las = 2)
+```
+
+## Data Cleaning
+
+```{r}
+# keep the deeply sequenced metaG
+list_metag_deep <- data %>% select(matches("metaG")) %>% colSums() %>% as.data.frame() %>% setNames("colsum") %>% 
+  arrange(desc(colsum)) %>% 
+  filter(colsum > 600000) %>% 
+  rownames
+
+list_metag_shallow <- data %>% select(matches("metaG")) %>% colSums() %>% as.data.frame() %>% setNames("colsum") %>% 
+  arrange(desc(colsum)) %>% 
+  filter(colsum < 600000) %>% 
+  rownames
+
+data <- data %>% select(-list_metag_shallow)
+
+# swap samples back
+colnames(data)[colnames(data) == "MI04T1_fru_1_metaG_S99"] <- "mi04t2_ref_1_metaG_S102"
+colnames(data)[colnames(data) == "MI04T2_ref_1_metaG_S102"] <- "mi04t1_fru_1_metaG_S99"
+
+colnames(data)[colnames(data) == "MI04T1_fru_1_metaT_S46"] <- "mi04t2_ref_1_metaT_S48"
+colnames(data)[colnames(data) == "MI04T2_ref_1_metaT_S48"] <- "mi04t1_fru_1_metaT_S46"
+
+colnames(data) <- str_replace(colnames(data), "mi04t", "MI04T")
+
+# get rid of samples with low count (optional)
+# data <- data %>% 
+#   select(-matches("MI04T1_ref_1"))
+```
+
+## In silico tRNA removal
+
+```{r}
+# ratio of genes containing tRNA
+ratio_metaG <- apply(data[str_detect(data$gene_name, "tRNA"), str_detect(colnames(data), "metaG")], 2, sum) / apply(data[, str_detect(colnames(data), "metaG")], 2, sum)
+ratio_metaT <- apply(data[str_detect(data$gene_name, "tRNA"), str_detect(colnames(data), "metaT")], 2, sum) / apply(data[, str_detect(colnames(data), "metaT")], 2, sum)
+ratio_metaRS <- apply(data[str_detect(data$gene_name, "tRNA"), str_detect(colnames(data), "metaRS")], 2, sum) / apply(data[, str_detect(colnames(data), "metaRS")], 2, sum)
+
+# get a list of tRNA gene names
+tRNAs <- data %>% 
+  distinct(gene_name) %>% 
+  filter(
+    grepl("tRNA", gene_name) &       
+    !grepl("ase", gene_name) &       
+    !grepl("protein", gene_name) &  
+    !grepl("enzyme", gene_name)      
+  )
+
+# remove tRNA
+data <- data %>% 
+  filter(!gene_name %in% tRNAs$gene_name)
+```
+
+## Normalization
+
+```{r}
+# Counts per million
+data_cpm <- data
+data_cpm[, str_detect(colnames(data_cpm), "meta")] <- apply(data_cpm[, str_detect(colnames(data_cpm), "meta")], 2, function(x) x/sum(x) * 1000000)
+
+# check
+apply(data_cpm[, str_detect(colnames(data_cpm), "meta")], 2, summary)
+```
+
+## Multiomics Filtering 
+
+```{r, eval = TRUE}
+# Create separate matrices for each omic
+metaG_mat <- data_cpm[, str_detect(colnames(data_cpm), "metaG")]
+colnames(metaG_mat) <- str_split(colnames(metaG_mat), "_meta", simplify = TRUE)[,1]
+metaT_mat <- data_cpm[, str_detect(colnames(data_cpm), "metaT")]
+colnames(metaT_mat) <- str_split(colnames(metaT_mat), "_meta", simplify = TRUE)[,1]
+metaRS_mat <- data_cpm[, str_detect(colnames(data_cpm), "metaRS")]
+colnames(metaRS_mat) <- str_split(colnames(metaRS_mat), "_meta", simplify = TRUE)[,1]
+
+# order them the same
+metaG_mat <- metaG_mat[, colnames(metaG_mat)]
+metaT_mat <- metaT_mat[,  colnames(metaG_mat)]
+metaRS_mat <- metaRS_mat[,  colnames(metaG_mat)]
+# Rename columns
+colnames(metaG_mat) <- paste(colnames(metaG_mat), "metaG", sep = "_")
+colnames(metaT_mat) <- paste(colnames(metaT_mat), "metaT", sep = "_")
+colnames(metaRS_mat) <- paste(colnames(metaRS_mat), "metaRS", sep = "_")
+
+# Filtering
+# metaT_mat[metaG_mat == 0] <- 0
+# metaRS_mat[metaG_mat == 0] <- 0
+# metaRS_mat[metaT_mat == 0] <- 0
+
+TE_mat <- metaRS_mat / metaT_mat
+
+colnames(TE_mat) <- str_replace(colnames(TE_mat), "_metaRS", "_TE")
+
+# NaN produced when 0/0
+TE_mat[is.na(TE_mat)] <- 0
+
+# Inf produced when x/0
+is.na(TE_mat) <- sapply(TE_mat, is.infinite)
+TE_mat[is.na(TE_mat)] <- 0
+#TE_mat[TE_mat<1] <- 0
+
+data_cpm <- data.frame(cbind(data_cpm[, 1:3], metaG_mat, metaT_mat, metaRS_mat, TE_mat))
+```
+
+## Import Proteins
+
+#### Select Importer Genes
+```{r, fig.height=16, fig.width=20}
+# select import proteins
+niche <- data_cpm %>% 
+  filter(
+    grepl("ransport", gene_name) |
+    grepl("mport", gene_name) |
+    grepl("ptake", gene_name) |
+    grepl("ermease", gene_name)) %>% 
+  filter(
+    !grepl("Autoinducer 2", gene_name),  # exclude: no info about substrates
+    !grepl("biotic", gene_name),         # exclude: those are to export
+    !grepl("utative", gene_name))  %>%  # exclude: putative genes 
+  select(genus, gene_name, matches("meta"), matches("TE"))
+
+
+# number of unique importer genes in total
+length(unique(niche$gene)) # 500
+```
+
+#### Table Formatting For Plots
+
+```{r}
+molten <- reshape::melt(niche, id.vars = c("genus", "gene_name"))
+
+molten$omic <- str_split(molten$variable, "_", simplify = TRUE)[,4]
+molten$omic <- ordered(molten$omic, levels = c("metaG", "metaT", "metaRS", "TE"))
+molten$condition <- str_split(molten$variable, "_", simplify = TRUE)[,2]
+molten$condition <- str_replace(molten$condition, "fru", "BHI + Fructose")
+molten$condition <- str_replace(molten$condition, "ref", "BHI")
+molten$condition <- ordered(molten$condition, levels = c("BHI", "BHI + Fructose"))
+```
+
+#### Overvall importer genes profile for T1
+```{r, fig.height=16, fig.width=20}
+# T1, all importer genes, TE, BHI condition
+molten %>% 
+  filter(
+    grepl("T1", variable),      # select individual
+    omic == "TE",               # select omics
+    condition == "BHI",         # select condition
+    value > 0) %>%              # filter on count values
+  mutate(value_log = log(value)) %>% 
+  ggplot(aes(x = gene_name, y = genus, fill= value_log)) + 
+           geom_tile() + 
+           scale_y_discrete(expand=c(0, 0)) +
+           facet_wrap(.~ condition + omic, ncol = 4) +
+           scale_fill_gradient(low="gold", high="red", na.value = "lightgray") +
+           theme(axis.text.x = element_text(angle=90, vjust = 0.5, hjust = 1)) + 
+           theme(text = element_text(size = 13))
+  
+```
+
+## Primary Targets
+
+```{r}
+# customized function
+primary_targets <- function(individual,           # e.g."T1"/"T2"
+                            value_cutoff,         # value > value_cutoff e.g. 10
+                            substrate_to_include, # substrate to include e.g. "ructose"
+                            substrate_to_exclude  # put "zzz" if no substrate to exclude
+                            ){
+  res <- molten %>% 
+    filter(
+      grepl(substrate_to_include, gene_name),
+      !grepl(substrate_to_exclude, gene_name),
+      grepl(individual, variable),
+      !grepl("Drancourtella", genus),
+      condition == "BHI",
+      omic == "TE",
+      value > value_cutoff) %>% 
+    arrange(desc(value)) %>%
+    group_by(genus, gene_name) %>%
+    summarize(average_value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(average_value))
+  
+  targets <- res %>% 
+    distinct(genus) %>% 
+    pull(genus)
+  
+  print(res)
+  return(list(res = res, targets = targets))
+  #return(targets)
+}
+```
+
+### MI04T1
+```{r}
+# fructose
+# pt_fructose <- primary_targets("T1", 10, 'ructose', 'ructoselysine')
+pt_fructose <- primary_targets("T1", 0, 'ructose', 'ructoselysine')
+write.csv(pt_fructose$res, "./out/tables/genus_prokka_fructose.csv")
+
+# xylose
+#pt_xylose <- primary_targets("T1", 10, 'ylose', 'zzz')
+pt_xylose <- primary_targets("T1", 0, 'ylose', 'zzz')
+write.csv(pt_xylose$res, "./out/tables/genus_prokka_xylose.csv")
+
+# ribose
+pt_ribose <- primary_targets("T1", 0, 'ibose', 'zzz')
+
+# galactose
+pt_galactose <- primary_targets("T1", 0, 'alactose', 'zzz')
+
+# glutathione
+pt_glutathione <- primary_targets("T1", 0, 'lutathione', 'zzz')
+
+# methionine
+pt_methionine <- primary_targets("T1", 10, 'ethionine', 'methylmethionine|D-methionine')
+
+# SpdPut
+pt_SpdPut <- primary_targets("T1", 10, 'permidin|utrescin', 'zzz')
+
+# B12
+pt_B12 <- primary_targets("T1", 10, 'B12|b12|obalamin', 'zzz') # value_cutoff modified
+
+# Hemin
+pt_Hemin <- primary_targets("T1", 10, 'emin', 'zzz')
+
+pt_fructose
+pt_xylose
+pt_ribose
+pt_galactose
+pt_glutathione
+pt_methionine
+pt_SpdPut
+pt_B12
+pt_Hemin
+```
+
