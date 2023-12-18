@@ -1,5 +1,5 @@
 ---
-title: "SynCom Data Prep"
+title: "MIND for SynCom grown in a soil microcosm: Data Prep"
 author: "Oriane Moyne"
 date: "10/19/2021"
 output: html_document
