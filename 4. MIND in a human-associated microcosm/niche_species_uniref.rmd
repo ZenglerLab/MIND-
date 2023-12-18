@@ -206,7 +206,7 @@ molten %>%
   filter(
     grepl('ylose', gene),
     !grepl('zzz', gene),        # select genes to exclude
-    !grepl("Drancourtella", genus),
+    !grepl("Drancourtella", genus), # select species to exclude, see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8116674/
     grepl("T1", variable),      # select individual
     omic == "TE",               # select omics
     condition == "BHI",         # select condition
