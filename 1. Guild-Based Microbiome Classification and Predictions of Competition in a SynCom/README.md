@@ -35,7 +35,6 @@ Data tables used in this directory were obtained through bioinformatic processin
 
 __Input File(s):__  
 ```
-- Final_18_strains_with_strainN.saf  
 - 18_strains_genenames.txt  
 - 18_genomes_KEGG_BlastKOALA.csv  
 - FINAL_SynCom_modifs_multiomics_count_table_formatted.tsv  
