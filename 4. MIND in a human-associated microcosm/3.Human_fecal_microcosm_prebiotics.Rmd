@@ -1,0 +1,1506 @@
+---
+title: "Results of prebiotic interventions in a human-associated gut microcosm"
+author: "Oriane Moyne"
+date: "4/28/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(scales)
+```
+
+## df import
+
+```{r}
+df <- fread("/home/moyne/Moyne_disk/MOMI_2020/MI04_prebiotics_test/multiomics_batch2_BHI/WoL_subset_NEW/MI04_BHI_prebiotics_timepoints_WoL_subset_Woltka_Classify_Species_NEW.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = "", 
+                   check.names = FALSE)
+
+df <- as.data.frame(df)
+
+df <- df[, colnames(df) == "#OTU ID" | str_detect(colnames(df), "^MI04T1")]
+
+colnames(df) <- str_replace(colnames(df), "_metaG_WoL_index_subset_NEW", "")
+
+df <- df[, !str_detect(colnames(df), "spd") & !str_detect(colnames(df), "meth") | !str_detect(colnames(df), "glu") | !str_detect(colnames(df), "spd")]
+
+# df <
+
+```
+
+
+```{r}
+colnames(df)[1] <- "species"
+df$species <- str_replace(df$species, "\\[", "")
+df$species <- str_replace(df$species, "\\]", "")
+```
+
+```{r}
+length(unique(df$species)) # 43 species
+length(unique(str_split(df$species, " ", simplify = TRUE)[, 1])) # 26 genera
+```
+
+
+```{r, eval = TRUE}
+# df <- aggregate(df[, 2:ncol(df)], by = list(str_split(df$species, " ", simplify = TRUE)[, 1]), sum)
+# colnames(df)[1] <- "species"
+```
+
+Check sequencing depth
+
+```{r, eval = TRUE}
+apply(df[, str_detect(colnames(df), "MI04")], 2, sum)
+
+par(mar = c(10, 5, 2, 2)) 
+barplot(apply(df[, str_detect(colnames(df), "MI04")], 2, sum), las=2)
+
+# some samples got most of the reads?
+sort(apply(df[, str_detect(colnames(df), "MI04")], 2, sum))
+
+df <- df[apply(df[, str_detect(colnames(df), "MI04")], 2, sum) > 500000] # discard too low raw counts
+
+# Counts per million
+df_cpm <- df
+df_cpm[, 2:ncol(df_cpm)] <- apply(df_cpm[, 2:ncol(df_cpm)], 2, function(x) x/sum(x) * 1000000)
+
+apply(df_cpm[, 2:ncol(df_cpm)], 1, function(x) summary(x))
+```
+
+PCA
+
+
+```{r, eval = TRUE, fig.width=8}
+rownames(df_cpm) <- df_cpm[, 1]
+
+# df_cpm <- df_cpm[, !str_detect(colnames(df_cpm), "hemin") & !str_detect(colnames(df_cpm), "b12"), ]
+
+for_pca <- data.frame(t(df_cpm[, !str_detect(colnames(df_cpm), "species")]))
+for_pca <- log(for_pca + 1)
+
+for_pca$time <- str_split(rownames(for_pca), "_", simplify = TRUE)[,1]
+for_pca$twin <- str_split(rownames(for_pca), "_", simplify = TRUE)[,2]
+for_pca$prebiotic <- str_split(rownames(for_pca), "_", simplify = TRUE)[,3]
+
+
+pca <- PCA(for_pca, 
+           quali.sup = c((ncol(for_pca)-2):ncol(for_pca)))
+
+fviz_pca_ind(pca, repel = TRUE)
+fviz_pca_ind(pca, repel = TRUE, habillage = "prebiotic", geom = c("point", "text"))
+fviz_pca_ind(pca, repel = TRUE, habillage = "prebiotic", geom = c("point"))
+fviz_pca_ind(pca, repel = TRUE, habillage = "twin", geom = c("point", "text"))
+fviz_pca_ind(pca, repel = TRUE, habillage = "twin", geom = c("point"))
+fviz_pca_ind(pca, repel = TRUE, habillage = "time", geom = c("point"))
+```
+
+
+```{r, eval = TRUE, fig.width=8}
+
+# ------------------------------
+pca <- PCA(for_pca[for_pca$time == "1", ], 
+           quali.sup = c((ncol(for_pca)-2):ncol(for_pca)))
+
+fviz_pca_ind(pca, repel = TRUE)
+fviz_pca_ind(pca, repel = TRUE, habillage = "prebiotic", geom = c("point"))
+
+
+pca <- PCA(for_pca[for_pca$time == "2", ], 
+           quali.sup = c((ncol(for_pca)-2):ncol(for_pca)))
+
+fviz_pca_ind(pca, repel = TRUE)
+fviz_pca_ind(pca, repel = TRUE, habillage = "prebiotic", geom = c("point"))
+
+pca <- PCA(for_pca[for_pca$time == "3", ], 
+           quali.sup = c((ncol(for_pca)-2):ncol(for_pca)))
+
+fviz_pca_ind(pca, repel = TRUE)
+fviz_pca_ind(pca, repel = TRUE, habillage = "prebiotic", geom = c("point"))
+```
+
+
+Define top abundance species
+
+```{r, eval = TRUE}
+df_cpm <- df_cpm[, !str_detect(colnames(df_cpm), "hemin") & !str_detect(colnames(df_cpm), "b12"), ]
+
+averagemetaG <- apply(df_cpm[, str_detect(colnames(df_cpm), "MI04")], 1, mean)
+df_cpm$average_metaG <- apply(df_cpm[, str_detect(colnames(df_cpm), "MI04")], 1, mean)
+
+df_cpm <- df_cpm[order(df_cpm$average_metaG, decreasing = TRUE), ]
+
+top30 <- df_cpm$species[1:30]
+top20 <- df_cpm$species[1:20]
+
+
+df_cpm$top <- ifelse(df_cpm$species %in% top20, df_cpm$species, "other")
+
+# reorder alphabetically
+df_cpm <- df_cpm[order(df_cpm$species), ]
+
+df_cpm$top <- ordered(df_cpm$top, levels = c(as.character(unique(df_cpm$top[df_cpm$top!="other"])) , "other"))
+```
+
+
+
+Abundance plot
+
+
+```{r}
+df_plots <- reshape::melt(df_cpm)
+colnames(df_plots) <- c("Taxon", "top", "Sample", "count")
+df_plots <- df_plots[order(df_plots$Taxon), ]
+df_plots <- df_plots[!str_detect(df_plots$Sample, "average"), ]
+
+df_plots$Sample <- as.character(df_plots$Sample)
+
+df_plots$time <- str_split(df_plots$Sample, "_", simplify = TRUE)[,1]
+df_plots$indiv <- str_split(df_plots$Sample, "_", simplify = TRUE)[,2]
+df_plots$prebiotic <- str_split(df_plots$Sample, "_", simplify = TRUE)[,3]
+df_plots$replicate <- str_split(df_plots$Sample, "_", simplify = TRUE)[,4]
+
+
+df_plots$Sample <- str_replace(df_plots$Sample, "MI04T1_", "")
+df_plots$Sample <- str_replace(df_plots$Sample, "MI04T2_", "")
+df_plots$Sample <- str_replace(df_plots$Sample, "b12", "B12")
+df_plots$Sample <- str_replace(df_plots$Sample, "fru", "Fructose")
+df_plots$Sample <- str_replace(df_plots$Sample, "gal", "Galactose")
+df_plots$Sample <- str_replace(df_plots$Sample, "glu", "Glutathione")
+df_plots$Sample <- str_replace(df_plots$Sample, "hemin", "Hemin")
+df_plots$Sample <- str_replace(df_plots$Sample, "meth", "Methionine")
+df_plots$Sample <- str_replace(df_plots$Sample, "ref", "Reference")
+df_plots$Sample <- str_replace(df_plots$Sample, "rib", "Ribose")
+df_plots$Sample <- str_replace(df_plots$Sample, "spdputr", "Spd_Putr")
+df_plots$Sample <- str_replace(df_plots$Sample, "xyl", "Xylose")
+
+
+
+df_plots <- df_plots[order(as.character(df_plots$Sample)), ]
+df_plots$Sample <- ordered(df_plots$Sample, levels = c(unique(df_plots$Sample[str_detect(df_plots$Sample, "Ref")]), unique(df_plots$Sample[!str_detect(df_plots$Sample, "Ref")])))
+
+df_plots$top <- ifelse(df_plots$Taxon %in% top20, df_plots$Taxon, "other")
+df_plots$top <- ordered(df_plots$top, levels = c(unique(df_plots$top[df_plots$top!="other"]) , "other"))
+```
+
+```{r}
+vec_col <- c("seagreen4",
+              "#2171B5",
+             "darkorange2", "olivedrab3",  "midnightblue", "deeppink",
+              "paleturquoise4",    "orange", "orchid3",
+           "gold","dodgerblue",  "mediumpurple3", 
+           "hotpink2","green3", "tomato", 
+           "violetred4",  "khaki2", "darkslateblue", "turquoise3", 
+           "seagreen3", 
+           "grey", "black")
+
+vec_col2 <- c("seagreen4", "plum3", "coral3",
+              "#2171B5",
+             "darkorange2", "indianred", "forestgreen",
+             "olivedrab3",  "midnightblue", "deeppink",
+              "paleturquoise4",    "orange", "orchid3",
+           "gold","dodgerblue", "darkgoldenrod3",
+           "mediumpurple3",
+           "hotpink2","green3", "tomato",
+           "violetred4",  "khaki2", "hotpink3",
+           "darkslateblue", "turquoise3",
+           "seagreen3",
+           "grey", "black")
+```
+
+
+```{r, fig.width = 16, fig.height = 12}
+ggplot(df_plots, aes(fill=Taxon, y=count, x=Sample)) +
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col2) +
+     facet_wrap(.~ time + indiv, nrow = 3, scales = "free") +
+   theme(text = element_text(size = 15)) +
+      labs(y = "Relative Abundance") +
+       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+
+
+
+
+
+
+
+# Regression plots
+
+```{r}
+# Calculate averages for each condition
+
+
+# Time1
+df_cpm$MI04T1_Ref_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_ref_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Fru_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_fru_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Gal_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_gal_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Glutathione_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_glu_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Meth_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_meth_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Rib_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_rib_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_SpdPutr_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_spdputr_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Xyl_T1 <- apply(df_cpm[, str_detect(colnames(df_cpm), "1_MI04T1_xyl_")], 1, function(x)median(x, na.rm = TRUE))
+
+
+# Time2
+df_cpm$MI04T1_Ref_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_ref_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Fru_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_fru_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Gal_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_gal_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Glutathione_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_glu_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Meth_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_meth_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Rib_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_rib_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_SpdPutr_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_spdputr_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Xyl_T2 <- apply(df_cpm[, str_detect(colnames(df_cpm), "2_MI04T1_xyl_")], 1, function(x)median(x, na.rm = TRUE))
+
+
+# Time3
+df_cpm$MI04T1_Ref_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_ref_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Fru_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_fru_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Gal_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_gal_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Glutathione_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_glu_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Meth_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_meth_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Rib_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_rib_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_SpdPutr_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_spdputr_")], 1, function(x)median(x, na.rm = TRUE))
+df_cpm$MI04T1_Xyl_T3 <- apply(df_cpm[, str_detect(colnames(df_cpm), "3_MI04T1_xyl_")], 1, function(x)median(x, na.rm = TRUE))
+
+```
+
+
+
+
+
+
+
+
+```{r, eval = TRUE, fig.height = 3.5, fig.width=7.5}
+primary_targets_T1_Xylose_genus <- str_split(primary_targets_T1_Xylose, " ", simplify = TRUE)[, 1]
+primary_targets_T1_Xylose_PROKKA_genus <- str_split(primary_targets_T1_Xylose_PROKKA, " ", simplify = TRUE)[, 1]
+df_cpm <- df_cpm[df_cpm$species %in% rownames(score), ]
+
+
+xyl1 <- ggplot(df_cpm, aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1)) + 
+  
+        geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium", "Bacteroides"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "blue", size = 6, shape = 8) +
+
+          geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Bacteroides", "Klebsiella"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+          geom_point(data = df_cpm[df_cpm$species %in% c("Finegoldia", "Eggerthella", "Phascolarctobacterium", "Escherichia", "Flavonifractor"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+
+  geom_point(size = 2.5, aes(color = species)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  guides(color = guide_legend(ncol = 2)) +
+
+xlab("Control (CPM)") +
+  ylab("Xylose 5 g/L (CPM)") 
+
+xyl1
+
+#ggsave("/home/moyne/Moyne_disk/MOMI_2020/MI04_prebiotics_test/multiomics_batch2_BHI/WoL_subset_NEW/MI04T1_xyl_Time1.png", plot=xyl1, height = 3.5, width = 7.5, dpi = 600)
+
+
+
+
+ggplot(df_cpm, aes(x = MI04T1_Ref_T3, y = MI04T1_Xyl_T3)) + 
+  
+        geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium", "Bacteroides"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Xyl_T3), color = "blue", size = 6, shape = 8) +
+
+          geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Bacteroides", "Klebsiella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Xyl_T3), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+          geom_point(data = df_cpm[df_cpm$species %in% c("Finegoldia", "Eggerthella", "Phascolarctobacterium", "Escherichia", "Flavonifractor"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Xyl_T3), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+
+            geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Shigella", "Escherichia"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Xyl_T3), color = "#2171B5", size = 6, shape = 6) + # Bacteroides compet
+          geom_point(data = df_cpm[df_cpm$species %in% c("Finegoldia", "Eggerthella", "Phascolarctobacterium", "Escherichia", "Flavonifractor", "Bifidobacterium", "Enterococcus", "Klebsiella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Xyl_T3), color = "#2171B5", size = 6, shape = 6) + # Bacteroides compet
+
+  geom_point(size = 2.5, aes(color = species)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control Time 3 (CPM)") +
+  ylab("Xylose 5 g/L Time 3 (CPM)") 
+
+```
+
+
+```{r, eval = TRUE, fig.height = 3.5, fig.width=7.5}
+primary_targets_T1_Fructose_genus <- str_split(primary_targets_T1_Fructose, " ", simplify = TRUE)[, 1]
+primary_targets_T1_Fructose_PROKKA_genus <- str_split(primary_targets_T1_Fructose_PROKKA, " ", simplify = TRUE)[, 1]
+
+fru1 <- ggplot(df_cpm, aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1)) + 
+
+             geom_point(data = df_cpm[df_cpm$species %in% c("Enterococcus", "Bifidobacterium", "Sellimonas", "Klebsiella"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "blue", size = 5, shape = 8) +
+
+          geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Bacteroides", "Klebsiella"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+          geom_point(data = df_cpm[df_cpm$species %in% c("Finegoldia", "Eggerthella", "Phascolarctobacterium", "Escherichia", "Flavonifractor"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+
+          geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Finegoldia"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "orchid3", size = 6, shape = 6) + # Entero compet
+          geom_point(data = df_cpm[df_cpm$species %in% c("Eggerthella", "Collinsella", "Gordonibacter", "Anaerococcus", "Paeniclostridium", "Clostridium"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "orchid3", size = 6, shape = 6) + # Entero compet
+
+
+     geom_point(size = 2.5, aes(color = species)) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  # geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.2, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+guides(color = guide_legend(ncol = 2)) +
+xlab("Control (CPM)") +
+  ylab("Fructose 5 g/L (CPM)") 
+
+fru1
+
+# ggsave("/home/moyne/Moyne_disk/MOMI_2020/MI04_prebiotics_test/multiomics_batch2_BHI/WoL_subset_NEW/MI04T1_fru_Time1.png", plot=fru1, height = 3.5, width = 7.5, dpi = 600)
+
+
+ggplot(df_cpm, aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3)) + 
+
+             geom_point(data = df_cpm[df_cpm$species %in% c("Enterococcus", "Bifidobacterium", "Sellimonas", "Klebsiella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "blue", size = 5, shape = 8) +
+
+          geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Bacteroides", "Klebsiella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+          geom_point(data = df_cpm[df_cpm$species %in% c("Finegoldia", "Eggerthella", "Phascolarctobacterium", "Escherichia", "Flavonifractor"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "darkorange2", size = 4.5, shape = 6) + # Bifido compet
+
+          geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Finegoldia"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "orange", size = 6, shape = 6) + # Entero compet
+          geom_point(data = df_cpm[df_cpm$species %in% c("Eggerthella", "Collinsella", "Gordonibacter", "Anaerococcus", "Paeniclostridium", "Clostridium"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "orange", size = 6, shape = 6) + # Entero compet
+
+
+     geom_point(size = 2.5, aes(color = species)) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  # geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.2, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control Time 3 (CPM)") +
+  ylab("Fructose 5 g/L Time 3 (CPM)") 
+```
+
+```{r, eval = TRUE, fig.height = 4, fig.width=8}
+
+ggplot(df_cpm, aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2)) + 
+
+             geom_point(data = df_cpm[df_cpm$species %in% c("Enterococcus", "Bifidobacterium", "Sellimonas", "Klebsiella", "Escherichia", "Clostridium", "Shigella"), ], aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2), color = "blue", size = 5, shape = 8) +
+
+                  geom_point(data = df_cpm[df_cpm$species %in% compet$Lactobacillus, ], aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2), color = "red", size = 5, shape = 6) +
+              geom_point(data = df_cpm[df_cpm$species %in% compet$Enterococcus, ], aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2), color = "red", size = 5, shape = 6) +
+  
+          geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Bacteroides", "Klebsiella"), ], aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2), color = "green", size = 5, shape = 6) +
+
+  
+     geom_point(size = 2.5, aes(color = top)) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.2, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control Time 2 (CPM)") +
+  ylab("Fructose 5 g/L Time 2 (CPM)") 
+
+
+ggplot(df_cpm, aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3)) + 
+
+             geom_point(data = df_cpm[df_cpm$species %in% c("Enterococcus", "Bifidobacterium", "Sellimonas", "Klebsiella", "Escherichia", "Clostridium", "Shigella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "blue", size = 5, shape = 8) +
+
+            geom_point(data = df_cpm[df_cpm$species %in% c("Sellimonas", "Veillonella", "Cutibacterium", "Collinsella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "red", size = 6, shape = 6) + # score > 1 against lactobacillus
+              geom_point(data = df_cpm[df_cpm$species %in% c("Bacteroides", "Klebsiella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "red", size = 6, shape = 6) + # score > 1 against bifido
+            geom_point(data = df_cpm[df_cpm$species %in% c("Escherichia", "Shigella", "Finegoldia"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "red", size = 6, shape = 6) + # score > 1 against enterococcus
+
+
+        geom_point(data = df_cpm[df_cpm$species %in% c("Citrobacter", "Bacteroides", "Klebsiella"), ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "green", size = 5, shape = 6) +
+
+     geom_point(size = 2.5, aes(color = top)) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.2, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control Time 3 (CPM)") +
+  ylab("Fructose 5 g/L Time 3 (CPM)") 
+
+
+```
+
+```{r, eval = TRUE, fig.height = 4, fig.width=9}
+#test
+
+test <- data.frame(t(df_cpm[, 142:ncol(df_cpm)]))
+test$sample <- rownames(test)
+test <- test[!str_detect(rownames(test), "MI04T2"), ]
+
+
+test <- data.frame(t(df_cpm[, 2:140]))
+test$sample <- paste(str_split(rownames(test), "_", simplify = TRUE)[,1], str_split(rownames(test), "_", simplify = TRUE)[,2], str_split(rownames(test), "_", simplify = TRUE)[,3], sep = "_")
+test <- test[!str_detect(rownames(test), "MI04T2"), ]
+# test <- test[str_detect(rownames(test), "3_"), ]
+
+
+ggplot(test, aes(x = sample, y = Clostridium)) +
+  geom_boxplot() +
+  scale_y_sqrt() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+  
+
+ggplot(test, aes(x = sample, y = Bifidobacterium)) +
+  geom_boxplot() +
+  scale_y_sqrt() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+ggplot(test, aes(x = sample, y = Lactobacillus)) +
+  geom_boxplot() +
+  scale_y_sqrt() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+ggplot(test, aes(x = sample, y = Enterococcus)) +
+  geom_boxplot() +
+  scale_y_sqrt() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+ggplot(test, aes(x = sample, y = Klebsiella)) +
+  geom_boxplot() +
+  scale_y_sqrt() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggplot(test, aes(x = sample, y = Citrobacter)) +
+  geom_boxplot() +
+  scale_y_sqrt() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+```{r, eval = TRUE, fig.height = 4, fig.width=9}
+
+df_cpm_cuti <- df_cpm
+df_cpm_cuti <- df_cpm_cuti[, c(1, 141:ncol(df_cpm_cuti))]
+
+df_cpm_cuti_t <- data.frame(t(df_cpm_cuti[, 3:ncol(df_cpm_cuti)]))
+
+df_cpm_cuti_t <- df_cpm_cuti_t / df_cpm_cuti_t$Cutibacterium
+
+df_cpm_cuti <- data.frame(cbind(df_cpm_cuti[, 1:2], t(df_cpm_cuti_t)))
+
+
+
+
+ggplot(df_cpm_cuti, aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1)) + 
+
+          geom_point(data = df_cpm_cuti[df_cpm_cuti$species %in% primary_targets_T1_Fructose_genus, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "blue", size = 6, shape = 8) +
+           geom_point(data = df_cpm_cuti[df_cpm_cuti$species %in% primary_targets_T1_Fructose_PROKKA_genus, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "blue", size = 4, shape = 8) +
+ 
+     geom_point(size = 2.5, aes(color = top)) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.2, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control Time 3 (CPM)") +
+  ylab("Fructose 5 g/L Time 3 (CPM)") 
+
+
+ggplot(df_cpm_cuti, aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2)) + 
+
+          geom_point(data = df_cpm_cuti[df_cpm_cuti$species %in% primary_targets_T1_Fructose_genus, ], aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2), color = "blue", size = 6, shape = 8) +
+           geom_point(data = df_cpm_cuti[df_cpm_cuti$species %in% primary_targets_T1_Fructose_PROKKA_genus, ], aes(x = MI04T1_Ref_T2, y = MI04T1_Fru_T2), color = "blue", size = 4, shape = 8) +
+ 
+     geom_point(size = 2.5, aes(color = top)) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.2, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control Time 3 (CPM)") +
+  ylab("Fructose 5 g/L Time 3 (CPM)") 
+
+
+ggplot(df_cpm_cuti, aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3)) + 
+
+          geom_point(data = df_cpm_cuti[df_cpm_cuti$species %in% primary_targets_T1_Fructose_genus, ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "blue", size = 6, shape = 8) +
+           geom_point(data = df_cpm_cuti[df_cpm_cuti$species %in% primary_targets_T1_Fructose_PROKKA_genus, ], aes(x = MI04T1_Ref_T3, y = MI04T1_Fru_T3), color = "blue", size = 4, shape = 8) +
+ 
+     geom_point(size = 2.5, aes(color = top)) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.2, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control Time 3 (CPM)") +
+  ylab("Fructose 5 g/L Time 3 (CPM)") 
+
+```
+
+
+
+
+```{r}
+df_cpm2 <- df_cpm[, c("species", "MI04T1_Fru_T1", "MI04T1_Ref_T1")]
+df_cpm2$FC_fru <- log(df_cpm2$MI04T1_Fru_T1) / log(df_cpm2$MI04T1_Ref_T1)
+df_cpm2$FC_fru <- (df_cpm2$MI04T1_Fru_T1) / (df_cpm2$MI04T1_Ref_T1)
+
+df_cpm2[order(df_cpm2$FC_fru, decreasing = TRUE), ]
+```
+
+```{r, eval = TRUE, fig.height = 6, fig.width=12}
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Fru_av)) + 
+
+   geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Fructose, ], aes(x = MI04T2_Ref_av, y = MI04T2_Fru_av), color = "red", size = 6, shape = 8) +
+     geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Fructose_PROKKA, ], aes(x = MI04T2_Ref_av, y = MI04T2_Fru_av), color = "blue", size = 4, shape = 8) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Fructose 5 g/L (CPM)") 
+
+
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av)) + 
+  
+       geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Xylose, ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 8) +
+       geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Xylose_PROKKA, ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "blue", size = 4, shape = 8) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Xylose 5 g/L (CPM)") 
+
+
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Rib_av)) + 
+  
+       geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Ribose, ], aes(x = MI04T2_Ref_av, y = MI04T2_Rib_av), color = "red", size = 6, shape = 8) +
+       geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Ribose_PROKKA, ], aes(x = MI04T2_Ref_av, y = MI04T2_Rib_av), color = "blue", size = 4, shape = 8) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Ribose 5 g/L (CPM)") 
+
+
+
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Gal_av)) + 
+  
+         geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Galactose, ], aes(x = MI04T2_Ref_av, y = MI04T2_Gal_av), color = "red", size = 6, shape = 8) +
+         # geom_point(data = df_cpm[df_cpm$species %in% c("Actinomyces turicensis"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Gal_av), color = "red", size = 6, shape = 8) +
+       geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Galactose_PROKKA, ], aes(x = MI04T2_Ref_av, y = MI04T2_Gal_av), color = "blue", size = 4, shape = 8) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Galactose 5 g/L (CPM)") 
+
+
+primary_targets_T2_Glutathione_PROKKA[18]
+
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Glutathione_av)) + 
+  
+         geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Glutathione, ], aes(x = MI04T2_Ref_av, y = MI04T2_Glutathione_av), color = "red", size = 6, shape = 8) +
+         geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Glutathione_PROKKA, ], aes(x = MI04T2_Ref_av, y = MI04T2_Glutathione_av), color = "blue", size = 4, shape = 8) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Glutathione 1 mM (CPM)") 
+
+
+
+
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Meth_av)) + 
+
+        geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Methionine, ], aes(x = MI04T2_Ref_av, y = MI04T2_Meth_av), color = "red", size = 6, shape = 8) +
+         geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_Methionine_PROKKA, ], aes(x = MI04T2_Ref_av, y = MI04T2_Meth_av), color = "blue", size = 4, shape = 8) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Methionine 1 mM (CPM)") 
+
+
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Meth_av)) + 
+  
+       geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_SpdPut, ], aes(x = MI04T2_Ref_av, y = MI04T2_Meth_av), color = "red", size = 6, shape = 8) +
+       geom_point(data = df_cpm[df_cpm$species %in% primary_targets_T2_SpdPut_PROKKA, ], aes(x = MI04T2_Ref_av, y = MI04T2_Meth_av), color = "blue", size = 4, shape = 8) +
+         # geom_point(data = df_cpm[df_cpm$species %in% c("Actinomyces turicensis"), ], aes(x = MI04T2_Ref_av, y = MI04T2_SpdPutr_av), color = "black", size = 10, shape = 8) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Spermidine + Putrescine 1 mM (CPM)") 
+
+
+
+```
+
+```{r, eval = TRUE, fig.height = 6, fig.width=12}
+ggplot(df_cpm, aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av)) + 
+
+     geom_point(data = df_cpm[str_detect(df_cpm$species, "Bifido"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "green", size = 6, shape = 8) +
+
+            geom_point(data = df_cpm[df_cpm$species %in% c("Gordonibacter pamelaeae"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+            geom_point(data = df_cpm[df_cpm$species %in% c("Eggerthella lenta"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+              geom_point(data = df_cpm[df_cpm$species %in% c("Phascolarctobacterium sp. CAG:207"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+            geom_point(data = df_cpm[df_cpm$species %in% c("Bacteroides fragilis CAG:47"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+            geom_point(data = df_cpm[df_cpm$species %in% c("Bacteroides fragilis"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+            # geom_point(data = df_cpm[df_cpm$species %in% c("Flavonifractor plautii"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+           # geom_point(data = df_cpm[str_detect(df_cpm$species, "Klebsiella"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+             # geom_point(data = df_cpm[str_detect(df_cpm$species, "Citrobacter"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+            # geom_point(data = df_cpm[df_cpm$species %in% c("Escherichia coli"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+                        # geom_point(data = df_cpm[str_detect(df_cpm$species, "Shigella"), ], aes(x = MI04T2_Ref_av, y = MI04T2_Xyl_av), color = "red", size = 6, shape = 6) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control (CPM)") +
+  ylab("Xylose 5 g/L (CPM)") 
+```
+
+
+## Increased or not?
+
+```{r}
+df_cpm_av <- df_cpm[, str_detect(colnames(df_cpm), "av") & colnames(df_cpm) != "average_metaG"]
+df_cpm_av[which(df_cpm_av == 0, arr.ind = TRUE)]
+df_cpm_av[df_cpm_av == 0] <- 0.001
+
+
+#MI04T1
+inorout_all <- data.frame(species = rownames(df_cpm_av))
+df_cpm_av_T1 <- df_cpm_av[, str_detect(colnames(df_cpm_av), "T1")]
+
+for (i in 1:ncol(df_cpm_av_T1)){
+
+model[[i]] <- lm(log10(df_cpm_av_T1[, i]) ~ log10(df_cpm_av_T1[, "MI04T1_Ref_av"]))
+inorout[[i]] <- data.frame(predict(model[[i]], type = "response", interval = "confidence", level = 0.95))
+
+rownames(inorout[[i]]) <- rownames(df_cpm_av_T1)
+inorout[[i]]$log_count <- log10(df_cpm_av_T1[, i])
+inorout[[i]]$in_or_out <- ifelse(round(inorout[[i]]$log_count, 7) < round(inorout[[i]]$lwr, 7), "decreased",   
+                            ifelse(round(inorout[[i]]$log_count, 7) > round(inorout[[i]]$upr, 7), "increased", 
+                                   "unchanged"))
+colnames(inorout[[i]]) <- paste(colnames(inorout[[i]]), colnames(df_cpm_av_T1[i]), sep = "_")
+
+inorout_all <- cbind(inorout_all, inorout[[i]][, 5, drop = FALSE])
+}
+
+#MI04T2
+inorout_all_T2 <- data.frame(species = rownames(df_cpm_av))
+df_cpm_av_T2 <- df_cpm_av[, str_detect(colnames(df_cpm_av), "T2")]
+
+for (i in 1:ncol(df_cpm_av_T2)){
+
+model[[i]] <- lm(log10(df_cpm_av_T2[, i]) ~ log10(df_cpm_av_T2[, "MI04T2_Ref_av"]))
+inorout[[i]] <- data.frame(predict(model[[i]], type = "response", interval = "confidence", level = 0.95))
+
+rownames(inorout[[i]]) <- rownames(df_cpm_av_T2)
+inorout[[i]]$log_count <- log10(df_cpm_av_T2[, i])
+inorout[[i]]$in_or_out <- ifelse(round(inorout[[i]]$log_count, 7) < round(inorout[[i]]$lwr, 7), "decreased",   
+                            ifelse(round(inorout[[i]]$log_count, 7) > round(inorout[[i]]$upr, 7), "increased", 
+                                   "unchanged"))
+colnames(inorout[[i]]) <- paste(colnames(inorout[[i]]), colnames(df_cpm_av_T2[i]), sep = "_")
+
+inorout_all_T2 <- cbind(inorout_all_T2, inorout[[i]][, 5, drop = FALSE])
+}
+
+## Combine
+
+inorout_all <- data.frame(cbind(inorout_all, inorout_all_T2[, 2:ncol(inorout_all_T2)]))
+inorout_all$species <- as.character(inorout_all$species)
+inorout_all
+
+inorout[[2]]
+
+inorout_all_molten$indiv <- str_split(inorout_all_molten$variable, "_", simplify = TRUE)[, 1]
+inorout_all_molten$prebiotic <- str_split(inorout_all_molten$variable, "_", simplify = TRUE)[, 2]
+```
+
+# PRIMARY TARGETS
+
+```{r}
+inorout_all_molten <- reshape2::melt(inorout_all, id.var = "species")
+inorout_all_molten$variable <- str_replace(inorout_all_molten$variable, "in_or_out_MI04", "")
+inorout_all_molten$variable <- str_replace(inorout_all_molten$variable, "_av", "")
+inorout_all_molten$variable <- str_replace(inorout_all_molten$variable, "SpdPutr", "SpdPut")
+colnames(inorout_all_molten)[3] <- "observed"
+
+# List all objects in the environment
+objects <- ls()
+
+
+# Define the regular expression patterns to match the vectors
+pattern1 <- "^primary_targets_[A-Z][0-9]_[A-Za-z0-9]+_PROKKA$"
+pattern2 <- "^primary_targets_[A-Z][0-9]_[A-Za-z0-9]+$"
+
+# Filter the objects using the patterns
+matching_vector1 <- objects[grep(pattern1, objects)]
+matching_vector2 <- objects[grep(pattern2, objects)]
+
+# Create an empty vector to store presence/absence information
+primary_target <- vector("character", nrow(inorout_all_molten))
+
+# Iterate over each row of the dataframe
+for (i in 1:nrow(inorout_all_molten)) {
+  # Extract variable and species values
+  variable <- inorout_all_molten$variable[i]
+  species <- inorout_all_molten$species[i]
+  
+  # Extract YY and XXXX parts from the variable
+  parts <- strsplit(variable, "_")
+  baby <- parts[[1]][1]
+  prebiotic <- parts[[1]][2]
+  
+  # Generate vector names
+  vector_name_pattern1 <- paste0("^primary_targets_", baby, "_.*", prebiotic, ".*_PROKKA$")
+  vector_name_pattern2 <- paste0("^primary_targets_", baby, "_.*", prebiotic, ".*")
+  
+  # Filter the vectors using the pattern
+  matching_vectors1 <- grep(vector_name_pattern1, matching_vector1, value = TRUE)
+  matching_vectors2 <- grep(vector_name_pattern2, matching_vector2, value = TRUE)
+
+  # Check if the species is present in any of the vectors
+  if (length(matching_vectors1) > 0 && species %in% get(matching_vectors1)) {
+    primary_target[i] <- "Target"
+  } else if (length(matching_vectors2) > 0 && species %in% get(matching_vectors2)) {
+    primary_target[i] <- "Target"
+  } else {
+    primary_target[i] <- "Not Target"
+  }
+}
+
+# Assign the presence vector to a new column in the dataframe
+inorout_all_molten$primary_target <- primary_target
+
+inorout_all_molten <- inorout_all_molten[!str_detect(inorout_all_molten$variable, "Ref"), ]
+
+table(inorout_all_molten[inorout_all_molten$variable == "T1_B12", "primary_target"])
+table(inorout_all_molten[inorout_all_molten$variable == "T1_Fru", "primary_target"])
+
+inorout_all_molten[inorout_all_molten$variable == "T2_B12", ]
+
+inorout_all_molten$indiv <- str_split(inorout_all_molten$variable, "_", simplify = TRUE)[, 1]
+inorout_all_molten$prebiotic <- str_split(inorout_all_molten$variable, "_", simplify = TRUE)[, 2]
+```
+
+```{r}
+# inorout_all_molten <- inorout_all_molten[!inorout_all_molten$prebiotic %in% c("B12", "Hemin", "Meth"), ]
+inorout_all_molten <- inorout_all_molten[inorout_all_molten$indiv == "T1", ]
+
+# Calculate overall sensitivity and specificity
+  TP <- sum(inorout_all_molten$primary_target == "Target" & inorout_all_molten$observed == "increased")
+  FP <- sum(inorout_all_molten$primary_target == "Target" & inorout_all_molten$observed != "increased")
+  TN <- sum(inorout_all_molten$primary_target != "Target" & inorout_all_molten$observed != "increased")
+  FN <- sum(inorout_all_molten$primary_target != "Target" & inorout_all_molten$observed == "increased")
+
+overall_sensitivity <- TP / (TP + FN)
+overall_specificity <- TN / (TN + FP)
+
+Total_Targets = TP + FP
+Total_Increased = TP + FN
+  
+Likelihood_of_Targets_to_Increase = TP / (TP + FP)
+Likelihood_of_Not_Targets_to_Increase = FN / (FN + TN)
+
+Likelihood_to_Increase = (TP + FN) / (FN + TN + TP + FP)
+
+
+# Print overall sensitivity and specificity
+cat("Overall Sensitivity:", overall_sensitivity, "\n")
+cat("Overall Specificity:", overall_specificity, "\n")
+cat("Total targets:", Total_Targets, "\n")
+cat("Total increased:", Total_Increased, "\n")
+cat("Likelihood of Targets to Increase:", Likelihood_of_Targets_to_Increase, "\n")
+cat("Likelihood of Non Targets to Increase:", Likelihood_of_Not_Targets_to_Increase, "\n")
+cat("Overall Likelihood to Increase:", Likelihood_to_Increase, "\n")
+
+Likelihood_of_Targets_to_Increase / Likelihood_of_Not_Targets_to_Increase
+```
+
+```{r}
+# Print unique combinations of indiv and prebiotic
+unique_combinations <- unique(inorout_all_molten[, c("indiv", "prebiotic")])
+print(unique_combinations)
+
+# Calculate sensitivity and specificity for each indiv and prebiotic combination
+resultsI <- data.frame()
+
+for (i in 1:nrow(unique_combinations)) {
+
+ group <- subset(inorout_all_molten, inorout_all_molten$indiv == unique_combinations[i, "indiv"] & inorout_all_molten$prebiotic == unique_combinations[i, "prebiotic"])
+
+
+  TP <- sum(group$primary_target == "Target" & group$observed == "increased")
+  FP <- sum(group$primary_target == "Target" & group$observed != "increased")
+  TN <- sum(group$primary_target != "Target" & group$observed != "increased")
+  FN <- sum(group$primary_target != "Target" & group$observed == "increased")
+  
+  sensitivity <- TP / (TP + FN)
+  specificity <- TN / (TN + FP)
+  
+  Total_Targets = TP + FP
+  Total_Increased = TP + FN
+  
+Likelihood_of_Targets_to_Increase = TP / (TP + FP)
+Likelihood_of_Not_Targets_to_Increase = FN / (FN + TN)
+
+Likelihood_to_Increase = (TP + FN) / (FN + TN + TP + FP)
+
+FC_Target_Not_Targets_Likelihood_to_Increase = Likelihood_of_Targets_to_Increase / Likelihood_of_Not_Targets_to_Increase
+
+
+  resultsI <- rbind(resultsI, data.frame(indiv = unique_combinations[i, "indiv"], prebiotic = unique_combinations[i, "prebiotic"], Sensitivity = sensitivity, Specificity = specificity, 
+                                       TP = TP, FP = FP, TN = TN, FN = FN, Likelihood_of_Targets_to_Increase = Likelihood_of_Targets_to_Increase, Likelihood_of_Not_Targets_to_Increase = Likelihood_of_Not_Targets_to_Increase, FC_Target_Not_Targets_Likelihood_to_Increase = FC_Target_Not_Targets_Likelihood_to_Increase, Total_Targets = Total_Targets, Total_Increased = Total_Increased))
+}
+
+# Print sensitivity and specificity for each indiv and prebiotic combination
+print(results)
+
+# summary(results)
+```
+
+# SECONDARY TARGETS
+
+```{r}
+# Create an empty column for secondary_target
+inorout_all_molten$secondary_target <- NA
+
+# Iterate over each unique value in the "variable" column
+unique_variables <- unique(inorout_all_molten$variable)
+
+for (variable in unique_variables) {
+  # Subset the data frame for the current variable
+  subset_df <- inorout_all_molten[inorout_all_molten$variable == variable, ]
+  
+  # Iterate over each species in the subset
+  unique_species <- unique(subset_df$species)
+  
+  for (species in unique_species) {
+    
+    # Check if species is in the compet list
+    if (species %in% names(compet)) {
+      
+      # Check the conditions: primary_target == "Target" and observed == "increased"
+      
+      if (subset_df$primary_target[subset_df$species == species] == "Target" &
+          subset_df$observed[subset_df$species == species] == "increased") {
+        
+        # Get the corresponding compet values for the species
+        species_compet <- compet[[species]]
+        
+        # Update secondary_target for matching species in compet
+        inorout_all_molten$secondary_target[inorout_all_molten$species %in% species_compet & inorout_all_molten$variable == variable] <- "Target"
+        
+      }
+    }
+  }
+}
+
+inorout_all_molten$secondary_target[is.na(inorout_all_molten$secondary_target)] <- "Not Target"
+
+```
+
+
+```{r}
+# inorout_all_molten <- inorout_all_molten[!inorout_all_molten$prebiotic %in% c("B12", "Hemin", "Meth"), ]
+
+inorout_all_molten <- inorout_all_molten[inorout_all_molten$indiv == "T1", ]
+
+# Calculate overall sensitivity and specificity
+  TP <- sum(inorout_all_molten$secondary_target == "Target" & inorout_all_molten$observed == "decreased")
+  FP <- sum(inorout_all_molten$secondary_target == "Target" & inorout_all_molten$observed != "decreased")
+  TN <- sum(inorout_all_molten$secondary_target != "Target" & inorout_all_molten$observed != "decreased")
+  FN <- sum(inorout_all_molten$secondary_target != "Target" & inorout_all_molten$observed == "decreased")
+
+overall_sensitivity <- TP / (TP + FN)
+overall_specificity <- TN / (TN + FP)
+
+# Print overall sensitivity and specificity
+cat("Overall Sensitivity:", overall_sensitivity, "\n")
+cat("Overall Specificity:", overall_specificity, "\n")
+```
+
+```{r}
+# Print unique combinations of indiv and prebiotic
+unique_combinations <- unique(inorout_all_molten[, c("indiv", "prebiotic")])
+print(unique_combinations)
+
+# Calculate sensitivity and specificity for each indiv and prebiotic combination
+resultsII <- data.frame()
+
+for (i in 1:nrow(unique_combinations)) {
+
+ group <- subset(inorout_all_molten, inorout_all_molten$indiv == unique_combinations[i, "indiv"] & inorout_all_molten$prebiotic == unique_combinations[i, "prebiotic"])
+
+
+  TP <- sum(group$secondary_target == "Target" & group$observed == "decreased")
+  FP <- sum(group$secondary_target == "Target" & group$observed != "decreased")
+  TN <- sum(group$secondary_target != "Target" & group$observed != "decreased")
+  FN <- sum(group$secondary_target != "Target" & group$observed == "decreased")
+  
+  sensitivity <- TP / (TP + FN)
+  specificity <- TN / (TN + FP)
+  
+  Total_Targets = TP + FP
+  Total_Decreased = TP + FN
+  
+
+  resultsII <- rbind(resultsII, data.frame(indiv = unique_combinations[i, "indiv"], prebiotic = unique_combinations[i, "prebiotic"], Sensitivity = sensitivity, Specificity = specificity, 
+                                       TP = TP, FP = FP, TN = TN, FN = FN, Total_Targets = Total_Targets, Total_Decreased = Total_Decreased))
+}
+
+# Print sensitivity and specificity for each indiv and prebiotic combination
+print(resultsII)
+
+# summary(results)
+```
+
+
+Is the following correct?
+```{r}
+# inorout_all_molten <- inorout_all_molten[!inorout_all_molten$prebiotic %in% c("B12", "Hemin", "Meth"), ]
+
+inorout_all_molten <- inorout_all_molten[inorout_all_molten$indiv == "T1", ]
+
+
+# Calculate overall sensitivity and specificity
+  TP <- sum(inorout_all_molten$secondary_target == "Target" & inorout_all_molten$observed == "decreased") + sum(inorout_all_molten$primary_target == "Target" & inorout_all_molten$observed == "increased")
+  FP <- sum(inorout_all_molten$secondary_target == "Target" & inorout_all_molten$observed != "decreased") + sum(inorout_all_molten$primary_target == "Target" & inorout_all_molten$observed != "increased")
+  TN <- sum(inorout_all_molten$secondary_target != "Target" & inorout_all_molten$observed != "decreased") + sum(inorout_all_molten$primary_target != "Target" & inorout_all_molten$observed != "increased")
+  FN <- sum(inorout_all_molten$secondary_target != "Target" & inorout_all_molten$observed == "decreased") + sum(inorout_all_molten$primary_target != "Target" & inorout_all_molten$observed == "increased")
+
+overall_sensitivity <- TP / (TP + FN)
+overall_specificity <- TN / (TN + FP)
+
+correct_prediction_rate = (TP + TN) / (TP + TN + FP + FN)
+
+# Print overall sensitivity and specificity
+cat("Overall Sensitivity:", overall_sensitivity, "\n")
+cat("Overall Specificity:", overall_specificity, "\n")
+cat("Correct Prediction rate (Accuracy):", correct_prediction_rate, "\n")
+```
+
+```{r}
+
+# Modified only (proportion of modifications we explained): 
+inorout_all_molten_changed <- inorout_all_molten[inorout_all_molten$observed != "unchanged", ]
+
+# Calculate overall sensitivity and specificity
+  TP <- sum(inorout_all_molten_changed$secondary_target == "Target" & inorout_all_molten_changed$observed == "decreased") + sum(inorout_all_molten_changed$primary_target == "Target" & inorout_all_molten_changed$observed == "increased")
+  FP <- sum(inorout_all_molten_changed$secondary_target == "Target" & inorout_all_molten_changed$observed != "decreased") + sum(inorout_all_molten_changed$primary_target == "Target" & inorout_all_molten_changed$observed != "increased")
+  TN <- sum(inorout_all_molten_changed$secondary_target != "Target" & inorout_all_molten_changed$observed != "decreased") + sum(inorout_all_molten_changed$primary_target != "Target" & inorout_all_molten_changed$observed != "increased")
+  FN <- sum(inorout_all_molten_changed$secondary_target != "Target" & inorout_all_molten_changed$observed == "decreased") + sum(inorout_all_molten_changed$primary_target != "Target" & inorout_all_molten_changed$observed == "increased")
+
+overall_sensitivity <- TP / (TP + FN)
+overall_specificity <- TN / (TN + FP)
+
+correct_prediction_rate = (TP + TN) / (TP + TN + FP + FN)
+
+# Print overall sensitivity and specificity
+cat("Overall Sensitivity:", overall_sensitivity, "\n")
+cat("Overall Specificity:", overall_specificity, "\n")
+cat("Correct Prediction rate (Accuracy):", correct_prediction_rate, "\n")
+```
+
+
+## Explore fold change
+
+```{r, fig.width = 14, fig.height= 12}
+
+df_cpm1 <- df_cpm[, str_detect(colnames(df_cpm), "_av")]
+df_cpm1 <- df_cpm[, !str_detect(colnames(df_cpm), "av") & colnames(df_cpm) != "species" & colnames(df_cpm) != "top"]
+
+
+df_cpm2 <- df_cpm1
+
+# df_cpm2[df_cpm2<10] <- 0 # to avoid crazy ratios due to very low counts
+
+
+df_cpm2 <- df_cpm2[apply(df_cpm2, 1, sum)>0, ]
+
+df_cpm2T1 <- df_cpm2[, str_detect(colnames(df_cpm2), "MI04T1")]
+df_cpm2T2 <- df_cpm2[, str_detect(colnames(df_cpm2), "MI04T2")]
+
+df_cpm2T1 <- df_cpm2T1 / df_cpm$MI04T1_Ref_av
+df_cpm2T2 <- df_cpm2T2 / df_cpm$MI04T2_Ref_av
+
+df_cpm2 <- data.frame(cbind(df_cpm2T1, df_cpm2T2))
+
+summary(df_cpm2)
+
+df_cpm2[is.na(df_cpm2)] <- 1
+df_cpm1[sapply(df_cpm2, is.infinite)]  # Replace fold change by count for the ones that became infinite
+
+# df_cpm2[sapply(df_cpm2, is.infinite)] <- df_cpm1[sapply(df_cpm2, is.infinite)]
+df_cpm2[sapply(df_cpm2, is.infinite)] <- 1
+
+max(df_cpm2, na.rm = TRUE)
+min(df_cpm2, na.rm = TRUE)
+
+
+
+
+heatmap.2(as.matrix(log(df_cpm1 + 1)), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+         # breaks = c(seq(0, 0.9, 0.1),  seq(1, 10, 1)),
+         # breaks = c(seq(0, 0.9, 0.1),  c(1, 2, 3, 4, 6, 8, 10, 20, 30, 50)),
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(10,15), 
+          lhei=c(1,5), lwid=c(2,8), cexRow = 1
+          )
+
+
+summary(log(df_cpm2 + 0.01))
+
+heatmap.2(as.matrix(log(df_cpm2 + 0.01)), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+         # breaks = c(seq(0, 0.9, 0.1),  seq(1, 10, 1)),
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(10,15), 
+          lhei=c(1,5), lwid=c(2,8), cexRow = 1
+          )
+```
+
+```{r}
+df_cpm0 <- data.frame(t(df_cpm1))
+
+df_cpm0 <- df_cpm0[str_detect(rownames(df_cpm0), "T1"), ]
+
+longum_compet
+dentium_compet
+
+ggplot(df_cpm0, aes(x = Bifidobacterium.dentium, y = Klebsiella.oxytoca)) +
+  geom_point() +
+    # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Bifidobacterium.longum, y = Parabacteroides.distasonis)) +
+  geom_point() +
+    #geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Bifidobacterium.longum, y = Enterococcus.faecalis)) +
+  geom_point() +
+  #geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10() 
+
+ggplot(df_cpm0, aes(x = Bifidobacterium.dentium, y = Bacteroides.sp..D2)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+
+ggplot(df_cpm0, aes(x = Bifidobacterium.dentium, y = Faecalibacterium.prausnitzii)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+longum_compet
+
+
+faecium_compet
+
+ggplot(df_cpm0, aes(x = Enterococcus.faecium, y = Bacteroides.ovatus.CAG.22)) +
+  geom_point() +
+    # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Enterococcus.faecium, y = Bacteroides.fragilis)) +
+  geom_point() +
+    #geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Enterococcus.faecium, y = Bacteroides.dorei.CAG.222)) +
+  geom_point() +
+    #geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Enterococcus.faecium, y = Veillonella.parvula)) +
+  geom_point() +
+  #geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10() 
+
+ggplot(df_cpm0, aes(x = Enterococcus.faecium, y = Collinsella.aerofaciens)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+
+
+ggplot(df_cpm0, aes(x = Bifidobacterium.bifidum, y = Collinsella.aerofaciens)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+
+ggplot(df_cpm0, aes(x = Enterococcus.faecium, y = Bifidobacterium.longum)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ # either one or the other
+
+ggplot(df_cpm0, aes(x = Veillonella.parvula, y = Lactobacillus.rhamnosus)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+
+ggplot(df_cpm0, aes(x = Shigella.dysenteriae, y = Bacteroides.fragilis)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+faecium_compet
+```
+
+
+
+
+```{r, fig.width = 14, fig.height= 14}
+
+df_cpm0 <- data.frame(t(df_cpm2))
+df_cpm0 <- df_cpm0[str_detect(rownames(df_cpm0), "T1"), ]
+
+df_cpm0 <- df_cpm0[, colnames(df_cpm0) != "Clostridium.sp..HGF2"]  # zero in ref
+
+library(Hmisc)
+M <- rcorr(as.matrix(log(df_cpm0 + 0.01)))
+M$P[is.na(M$P)] <- 0
+
+
+library(corrplot)
+# M <- cor(log(df_cpm0 + 0.01))
+
+corrplot(M$r, 
+         method="color", 
+         tl.col="black", 
+         order = "hclust",
+         tl.cex = 0.6 
+         # p.mat = M$P, 
+         # sig.level = 0.05, 
+         # insig = "blank"
+         # col=rev(brewer.pal(n=8, name="RdBu")), 
+         )
+
+data.frame(M$r)
+```
+
+
+```{r}
+# They are the same bug!
+df_cpm00 <- log(df_cpm0 + 0.01)
+
+cor.test(df_cpm00$Escherichia.coli, df_cpm00$Shigella.flexneri)
+cor.test(df_cpm00$Escherichia.coli, df_cpm00$Shigella.dysenteriae)
+cor.test(df_cpm00$Enterococcus.faecium, df_cpm00$Lactobacillus.rhamnosus) # not the same
+cor.test(df_cpm0$Collinsella.aerofaciens, df_cpm0$Collinsella.sp..CAG.166)
+
+cor.test(df_cpm0$Bacteroides.vulgatus, df_cpm0$Bacteroides.fragilis) # maybe not
+cor.test(df_cpm0$Bacteroides.fragilis.CAG.47, df_cpm0$Bacteroides.fragilis) 
+cor.test(df_cpm0$Bacteroides.ovatus, df_cpm0$Bacteroides.sp..D2) # nope
+cor.test(df_cpm0$Bacteroides.vulgatus.CAG.6, df_cpm0$Bacteroides.dorei.CAG.222) # nope
+cor.test(df_cpm0$Bacteroides.vulgatus, df_cpm0$Bacteroides.dorei.CAG.222) # nope
+
+
+
+cor.test(df_cpm0$Drancourtella.massiliensis, df_cpm0$Sellimonas.intestinalis)
+
+
+
+ggplot(df_cpm0, aes(x = Escherichia.coli, y = Shigella.flexneri)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Shigella.flexneri, y = Shigella.dysenteriae)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+
+ggplot(df_cpm0, aes(x = Escherichia.coli, y = Shigella.dysenteriae)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Enterococcus.faecalis, y = Klebsiella.pneumoniae)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+
+ggplot(df_cpm0, aes(x = Drancourtella.massiliensis, y = Sellimonas.intestinalis)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Bacteroides.fragilis, y = Bacteroides.fragilis.CAG.47)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+
+ggplot(df_cpm0, aes(x = Collinsella.sp..CAG.166, y = Collinsella.aerofaciens)) +
+  geom_point() +
+   # geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+```{r}
+
+prediction <- distmat
+prediction$species <- rownames(prediction)
+prediction <- melt(prediction)
+prediction$variable <- str_replace_all(prediction$variable, "\\.", "\\ ")
+prediction$variable <- str_replace(prediction$variable, "CAG ", "CAG:")
+prediction$variable <- str_replace(prediction$variable, "sp ", "sp.")
+
+M <- rcorr(as.matrix(log(df_cpm0 + 0.01)))
+M$P[is.na(M$P)] <- 0
+# M$r[M$P > 0.05] <- NA
+
+observation <- data.frame(M$r)
+observation$species <- rownames(observation)
+observation <- melt(observation)
+observation$species <- str_replace_all(observation$species, "\\.", "\\ ")
+observation$species <- str_replace(observation$species, "CAG ", "CAG:")
+observation$species <- str_replace(observation$species, "sp ", "sp.")
+
+observation$variable <- str_replace_all(observation$variable, "\\.", "\\ ")
+observation$variable <- str_replace(observation$variable, "CAG ", "CAG:")
+observation$variable <- str_replace(observation$variable, "sp ", "sp.")
+
+table(prediction$species %in% observation$species)
+table(observation$species %in% prediction$species)
+
+observation$species[!observation$species %in% prediction$species]
+
+predobs <- merge(prediction, observation, by = c("species", "variable"))
+colnames(predobs)[3:4] <- c("pred", "obs")
+# 
+# predobs <- predobs[predobs$species %in% top30, ]
+# predobs <- predobs[predobs$variable %in% top30, ]
+
+predobs <- predobs[predobs$obs < 0.999,  ]
+cor.test(- predobs$pred, predobs$obs)
+# predobs <- predobs[predobs$pred > -2,  ]
+
+predobs$variable <- as.character(predobs$variable)
+
+predobs <- predobs[str_split(predobs$species, "\\ ", simplify = T)[,1] !=  str_split(predobs$variable, "\\ ", simplify = T)[,1] , ]
+# predobs <- predobs[str_split(predobs$species, "\\ ", simplify = T)[,1] !=  str_split(predobs$variable, "\\.", simplify = T)[,1] , ]
+
+predobs <- predobs[!is.na(predobs$species), ]
+
+
+ggplot(predobs, aes(x = - pred, y = obs)) +
+   geom_point() +
+  geom_rug(col = rgb(.5, 0, 0, alpha = .2)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+   geom_smooth(method = "lm", alpha = 0.2)
+
+
+
+
+predobs$obs_bin <- c()
+predobs$obs_bin[predobs$obs>0] <- "increased"
+predobs$obs_bin[predobs$obs<0] <- "decreased"
+
+
+ggplot(predobs, aes(x = - pred, y = obs_bin)) +
+   geom_boxplot()
+
+
+predobsdown <- predobs[predobs$obs < 0,  ]
+
+ggplot(predobsdown, aes(x = - pred, y = obs)) +
+   geom_point() +
+  geom_rug(col = rgb(.5, 0, 0, alpha = .2)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+   geom_smooth(method = "lm", alpha = 0.2)
+
+predobsup <- predobs[predobs$obs > 0,  ]
+
+ggplot(predobsup, aes(x = - pred, y = obs)) +
+   geom_point() +
+  geom_rug(col = rgb(.5, 0, 0, alpha = .2)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+   geom_smooth(method = "lm", alpha = 0.2)
+#  
+cor.test(- predobs$pred, predobs$obs)
+
+# predobs[order(predobs$pred, decreasing = T), ]
+```
+
+
+```{r}
+df_cpm11 <- data.frame(t(log(df_cpm1 + 1)))
+df_cpm11$twin <- str_split(rownames(df_cpm11), "_", simplify = T)[, 1]
+df_cpm11$condition <- str_split(rownames(df_cpm11), "_", simplify = T)[, 2]
+
+pca1 <- PCA(df_cpm11, graph = T, 
+            quali.sup = c((ncol(df_cpm11)-1):ncol(df_cpm11)))
+
+fviz_pca_ind(pca1, repel = T, habillage = "condition")
+fviz_pca_ind(pca1, repel = T, habillage = "twin")
+
+
+df_cpm22 <- data.frame(t(log(df_cpm2 + 1)))
+df_cpm22$twin <- str_split(rownames(df_cpm22), "_", simplify = T)[, 1]
+df_cpm22$condition <- str_split(rownames(df_cpm22), "_", simplify = T)[, 2]
+
+pca2 <- PCA(df_cpm22, graph = T, 
+            quali.sup = c((ncol(df_cpm22)-1):ncol(df_cpm22)))
+
+fviz_pca_ind(pca2, repel = T, habillage = "condition")
+fviz_pca_ind(pca2, repel = T, habillage = "twin")
+```
+
+
+
+
+
+Export normalized combined table
+
+```{r}
+write.table(df_cpm, "/home/moyne/Moyne_disk/MOMI_2020/MI04_prebiotics_test/multiomics_batch2_BHI/WoL_subset/MI04_all_omics_CPM_species.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    row.names = FALSE)
+```
