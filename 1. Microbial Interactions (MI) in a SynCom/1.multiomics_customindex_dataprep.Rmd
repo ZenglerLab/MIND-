@@ -92,7 +92,7 @@ syncom[, colnames(syncom)=="1_2_T2_metaG"] <- 0
 
 ## RPKM
 
-Import saf file
+Import saf file (contains genomes lengths)
 
 ```{r}
 saf <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/Final_18_strains_with_strainN.saf", 
@@ -146,10 +146,8 @@ syncom <- merge(metadata, syncom, by.x = "gene", by.y = "GeneID")
 
 # Filtering
 
-metaRS reads are very short, so they are prone to false hits in alignment. To remove this noise, we filter out metaRS reads that were not detected in metaT data.  
-
+Filter out metaRS reads that were not detected in metaT data.  
 This step is optional.
-
 
 
 ```{r, eval = TRUE}
@@ -188,7 +186,6 @@ table(metaRS_mat == 0)
 metaRS_mat[metaT_mat == 0] <- 0
 #metaT_mat[metaRS_mat == 0] <- 0
 
-
 syncom <- data.frame(cbind(syncom[, 1:4], metaG_mat, metaT_mat, metaRS_mat))
 ```
 
@@ -224,7 +221,7 @@ syncom[syncom$genus_strain == "Bacillus_OAE603", ][, 5:ncol(syncom)] <- 0
 
 syncom <- syncom[syncom$genus_strain != "Terrabacter_OAE601" & syncom$genus_strain != "Bacillus_OAE603", ]
 
-# Remove removed species
+# Remove removed species from dropout experiments
 # syncom[syncom$genus_strain == "Terrabacter_OAE601", !str_detect(colnames(syncom), "2_1")|!str_detect(colnames(syncom), "2_2")][, 5:ncol(syncom)] <- 0
 syncom[syncom$genus_strain == "Lysobacter_OAE881", str_detect(colnames(syncom), "3_1")|str_detect(colnames(syncom), "3_2")] <- 0
 syncom[syncom$genus_strain == "Mucilaginibacter_OAE612", str_detect(colnames(syncom), "4_1")|str_detect(colnames(syncom), "4_2")] <- 0
