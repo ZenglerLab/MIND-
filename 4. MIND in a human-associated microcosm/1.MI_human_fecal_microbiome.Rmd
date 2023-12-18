@@ -1,0 +1,65 @@
+
+```{r, eval = TRUE, fig.height = 4.5, fig.width=10}
+df_cpm <- df_cpm[df_cpm$species %in% rownames(score), ] #score created from script 3.KEGG_multiomics_BHI_final_Species.Rmd
+
+vec_col1 <- c("seagreen4", rev(cols)[1:3],
+             "orange1","orange2", "orange3",  
+              "olivedrab3",  "olivedrab4", 
+             "deeppink",
+              "darkgoldenrod1", "tomato", "plum3", "plum4",  
+           "gold",   "seagreen1",  "dodgerblue",   
+             "hotpink", "hotpink3", 
+             "violetred4", 
+           "turquoise1", "turquoise3",
+           "grey")
+
+
+xyl1 <- ggplot(df_cpm, aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1)) + 
+  
+            # geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 6, shape = 8) +
+          geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum", "Bifidobacterium breve"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 6, shape = 8) +
+  
+    geom_point(data = df_cpm[df_cpm$species %in% compet$`Bifidobacterium longum`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 5, shape = 6) +
+      geom_point(data = df_cpm[df_cpm$species %in% compet$`Bifidobacterium breve`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 5, shape = 6) +
+
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=12)) +
+  guides(color = guide_legend(ncol = 2)) +
+
+xlab("Control (CPM)") +
+  ylab("Xylose 5 g/L (CPM)") 
+
+fru1 <- ggplot(df_cpm, aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1)) + 
+  
+          geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum", "Klebsiella pneumoniae", "Enterococcus faecium", "Enterococcus faecalis", "Sellimonas intestinalis"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 6, shape = 8) +
+           # geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum", "Klebsiella pneumoniae"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "blue", size = 4, shape = 8) +
+  
+    geom_point(data = df_cpm[df_cpm$species %in% compet$`Enterococcus faecium`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 5, shape = 6) +
+      geom_point(data = df_cpm[df_cpm$species %in% compet$`Enterococcus faecalis` & !df_cpm$species %in% compet$`Enterococcus faecium`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 5, shape = 6) +
+
+      geom_point(data = df_cpm[df_cpm$species %in% compet$`Bifidobacterium longum` & !df_cpm$species %in% compet$`Enterococcus faecium` & !df_cpm$species %in% compet$`Enterococcus faecalis`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 5, shape = 6) +
+
+             # geom_point(data = df_cpm[df_cpm$species %in% c("Clostridium paraputrificum"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "black", size = 4, shape = 13) +
+
+  geom_point(size = 2.5, aes(color = top)) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=12)) +
+  guides(color = guide_legend(ncol = 2)) +
+
+xlab("Control (CPM)") +
+  ylab("Fructose 5 g/L (CPM)") 
+```
