@@ -1,4 +1,4 @@
-# TE-based Functional Profiling and Prediction of Microbial Interactions (MI)
+# Prediction of Microbial Interactions (MI) in a SynCom
 
 _Note: The following scripts need to be run in sequence._  
 _Note: Before running these scripts, users should modify the path of any data table import or export to match location of corresponding files in their system_ 
