@@ -30,12 +30,17 @@ The repository is divided in subdirectories, which follow the overall outline of
 __1. Microbial Interactions (MI) in a SynCom__  
 
 This section contains scripts and data used to determine __microbial functional profiles__ and __predict competition__ in a 16-member synthetic community (SynCom) based on translational efficiency (TE = metaRibo-Seq / metaRNA-Seq).  
-It also contains results of experimental dropout experiments used to validate MI-based predictions of competition interactions.  
+It also contains results of dropout experiments used to validate MI-based predictions of competition interactions.  
 
 __2. Niche Determination (ND) in a SynCom__  
 
 This section contains scripts and data used to perform __Niche Determination (ND)__ and __predict substrate preferences__ in a 16-member synthetic community (SynCom) based on TE.  
-It also contains results of experimental results of experimental prebiotic experiments used to validate niches-based predictions of substrate preferences.  
+It also contains results of prebiotic experiments used to validate niches-based predictions of substrate preferences.  
+
+__3. MIND in a soil microcosm__
+
+This section contains scripts and data used to perform __MIND predictions__ based on TE in a soil microcosm grown in complex medium.  
+It also contains results of prebiotic and probiotic experiments used to validate MIND predictions of substrate preferences and competition.  
 
 ## Versions  
 
