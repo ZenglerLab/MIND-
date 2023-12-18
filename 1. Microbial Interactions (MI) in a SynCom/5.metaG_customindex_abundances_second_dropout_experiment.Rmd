@@ -1,0 +1,267 @@
+---
+title: "SynCom Community Modifs Abundance Analysis"
+author: "Oriane Moyne"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(gplots)
+library(ggpubr)
+library(cowplot)
+```
+
+## Experiment summary:
+
+SynCom vs. SynCom - strain (dropout) grown for 7 days in 0.1x R2A. Relative abundances measured by metagenomics.  
+
+Samples:  
+- X1: Full SynCom
+- X2: _Bradyrhizobium_ dropout
+- X3: _Arthrobacter_ dropout
+- X4: _Mucilaginibacter_ AND _Chitinophaga_ dropout
+- X5: _Rhizobium_ AND _Burkholderia_ dropout
+
+## Data import 
+
+```{r}
+# Count tables with taxonomy annotations (Woltka gotu output)
+syncom <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/PROBIOTOCS_EXPT_3/Dropout_expt2_Syncom_formatted_filtered_corrected_RPKM.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "")
+
+syncom$genus_strain <- str_split(syncom$genus_strain, "_", simplify = TRUE)[,1]
+# syncom <- syncom[!syncom$genus_strain %in% c("Terrabacter", "Bacillus", "Marmoricola", "Mycobacterium"), ]
+syncom <- syncom[!syncom$genus_strain %in% c("Terrabacter", "Bacillus"), ]
+
+syncom$genus_strain <- str_replace(syncom$genus_strain, "Chitinophagaceae", "Niastella")
+
+colnames(syncom) <- c(colnames(syncom)[1:3], paste(str_split(colnames(syncom[, 4:ncol(syncom)]), "_", simplify = TRUE)[,1], str_split(colnames(syncom[, 4:ncol(syncom)]), "_", simplify = TRUE)[,2], sep = "_"))
+colnames(syncom) <- c(colnames(syncom)[1:3],  paste("X", colnames(syncom[, 4:ncol(syncom)]), sep = ""))
+```
+
+
+## Aggregate by strain
+
+```{r}
+syncom_agg <- syncom[, c(3:ncol(syncom))]
+syncom_agg <- aggregate(syncom_agg[, 2:ncol(syncom_agg)], by = list(syncom_agg$genus_strain), sum)
+```
+
+## PCA plot
+
+```{r, eval = TRUE, fig.width=8}
+for_pca <- data.frame(t(syncom_agg[, 2:ncol(syncom_agg)]))
+colnames(for_pca) <- paste(syncom_agg$Group.1)
+                             
+pca <- PCA(for_pca)
+
+fviz_pca_biplot(pca)
+```
+
+Replicates look similar, samples (points) cluster away from the dropped out strain (arrow). Good.
+
+
+## Abundance plots
+
+
+```{r}
+data_plots <- reshape::melt(syncom_agg)
+colnames(data_plots) <- c("Taxon", "Sample", "count")
+
+data_plots$Sample <- as.character(data_plots$Sample)
+
+data_plots$Community <- str_split(data_plots$Sample, "_", simplify = TRUE)[, 1]
+data_plots$Replicate <- str_split(data_plots$Sample, "_", simplify = TRUE)[, 2]
+
+data_plots$Concentration <- str_split(data_plots$Sample, "_", simplify = TRUE)[, 2]
+```
+
+
+
+```{r, eval = TRUE}
+vec_col1 <- c("seagreen4", 
+           "gold", "brown1", 
+             "darkmagenta",
+              "dodgerblue2",  
+           "orange",   "midnightblue", "deeppink",
+           "chartreuse3","darkorange2", "mediumpurple3",  
+           "mediumvioletred", "cyan3", "deepskyblue4", 
+           "orchid3",  
+           "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", "hotpink",
+           "grey", "black")
+```
+
+
+```{r, fig.height=4, fig.width=8}
+ggplot(data_plots, aes(fill=Taxon, y=count, x=Replicate)) + 
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col1) +
+    facet_wrap(.~Community, ncol = 6, scales = "free_x") +
+   theme(text = element_text(size = 15)) +
+  labs(y = "RPKM") 
+
+# Replicates look great
+```
+
+
+```{r}
+test3 <- aggregate(syncom[, 4:ncol(syncom)], by = list(syncom$genus_strain), sum)
+
+test3$X1_av <- apply(test3[, str_detect(colnames(test3), "X1")], 1, function(x)mean(x, na.rm = TRUE))
+test3$X2_av <- apply(test3[, str_detect(colnames(test3), "X2")], 1, function(x)mean(x, na.rm = TRUE))
+test3$X3_av <- apply(test3[, str_detect(colnames(test3), "X3")], 1, function(x)mean(x, na.rm = TRUE))
+test3$X4_av <- apply(test3[, str_detect(colnames(test3), "X4")], 1, function(x)mean(x, na.rm = TRUE))
+test3$X5_av <- apply(test3[, str_detect(colnames(test3), "X5")], 1, function(x)mean(x, na.rm = TRUE))
+```
+
+
+## Bradyrhizobium dropout (Fig. 2e)
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+vec_col <- c("seagreen4", "gold", #"brown1", 
+             "darkmagenta",
+              "dodgerblue2",  "orange", "midnightblue", "deeppink",
+           "chartreuse3","darkorange2","mediumpurple3", 
+           "mediumvioletred", "cyan3", "deepskyblue4", 
+           "orchid3",  "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", "hotpink",
+           "grey", "black")
+
+bra <- ggplot(test3[test3$Group.1 != "Bradyrhizobium", ], aes(x = X1_av, y = X2_av)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+   theme(text = element_text(size = 7), legend.position = "none",   axis.title=element_text(size=10)) +
+  xlab("SynCom") +
+  ylab(expression(italic("- Bradyrhizobium"))) +
+  geom_point(aes(x = test3[test3$Group.1 == "Bradyrhizobium", ]$X1_av, y = test3[test3$Group.1 == "Bradyrhizobium", ]$X2_av), color = "brown1", shape = 8, size = 2.5, fill = "brown1") +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+bra
+```
+
+## Arthrobacter dropout (Fig. 2e)
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+vec_col <- c(#"seagreen4", 
+  "gold", "brown1", 
+             "darkmagenta",
+              "dodgerblue2",  "orange", "midnightblue", "deeppink",
+           "chartreuse3","darkorange2", "mediumpurple3",
+  "mediumvioletred", "cyan3", "deepskyblue4", 
+           "orchid3",  
+           "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", "hotpink",
+           "grey", "black")
+
+art <- ggplot(test3[test3$Group.1 != "Arthrobacter", ], aes(x = X1_av, y = X3_av)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+   theme(text = element_text(size = 7), legend.position = "none",   axis.title=element_text(size=10)) +
+  xlab("SynCom") +
+  ylab(expression(italic("- Arthrobacter"))) +
+  geom_point(aes(x = test3[test3$Group.1 == "Arthrobacter", ]$X1_av, y = test3[test3$Group.1 == "Arthrobacter", ]$X3_av), color = "seagreen4", shape = 8, size = 2.5, fill = "seagreen4") +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+art
+```
+
+## Mucilaginibacter AND Chitinophaga dropout (Supp. Fig. S7 h)
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+vec_col <- c("seagreen4", 
+              "gold", "brown1", 
+             "darkmagenta",
+              "dodgerblue2",  #"orange", 
+             "midnightblue", "deeppink",
+           "chartreuse3",#"darkorange2",
+           "mediumpurple3", 
+          "mediumvioletred", "cyan3", "deepskyblue4", 
+           "orchid3",  
+           "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", "hotpink",
+           "grey", "black")
+
+chimu <- ggplot(test3[!test3$Group.1 %in% c("Chitinophaga", "Mucilaginibacter"), ], aes(x = X1_av, y = X4_av)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col) +
+   geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+   theme(text = element_text(size = 7),   axis.title=element_text(size=10)) +
+  xlab("SynCom") +
+  ylab(expression(italic("- Chitinophaga & Mucilaginibacter"))) +
+    geom_point(aes(x = test3[test3$Group.1 == "Chitinophaga", ]$X1_av, y = test3[test3$Group.1 == "Chitinophaga", ]$X4_av), color = "orange", shape = 6, size = 2.5, fill = "orange") +
+      geom_point(aes(x = test3[test3$Group.1 == "Mucilaginibacter", ]$X1_av, y = test3[test3$Group.1 == "Mucilaginibacter", ]$X4_av), color = "darkorange2", shape = 6, size = 2.5, fill = "darkorange2") +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+chimu
+```
+
+## Burkholderia AND Rhizobium dropout (Supp. Fig. S7 d)
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+
+vec_col <- c("seagreen4", 
+              "gold", "brown1", 
+             "darkmagenta",
+              #"dodgerblue2",  
+             "orange", 
+             "midnightblue", "deeppink",
+           "chartreuse3","darkorange2",
+           "mediumpurple3", 
+           "mediumvioletred", "cyan3", #"deepskyblue4", 
+           "orchid3",  
+           "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", "hotpink",
+           "grey", "black")
+
+rhibu <- ggplot(test3[!test3$Group.1 %in% c("Rhizobium", "Burkholderia"), ], aes(x = X1_av, y = X5_av)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt(labels = function(x) format(x, scientific = TRUE), breaks = c(200000, 400000,1000000)) +
+  scale_color_manual(values = vec_col) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+   theme(text = element_text(size = 7), legend.position = "none",   axis.title=element_text(size=10)) +
+  xlab("SynCom") +
+  ylab(expression(italic("- Rhizobium & Burkholderia"))) +
+    geom_point(aes(x = test3[test3$Group.1 == "Rhizobium", ]$X1_av, y = test3[test3$Group.1 == "Rhizobium", ]$X5_av), color = "deepskyblue4", shape = 6, size = 2.5, fill = "deepskyblue4") +
+      geom_point(aes(x = test3[test3$Group.1 == "Burkholderia", ]$X1_av, y = test3[test3$Group.1 == "Burkholderia", ]$X5_av), color = "dodgerblue2", shape = 6, size = 2.5, fill = "dodgerblue2") +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+rhibu
+```
