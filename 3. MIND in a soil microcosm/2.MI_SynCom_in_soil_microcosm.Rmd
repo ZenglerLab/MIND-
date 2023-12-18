@@ -1,0 +1,462 @@
+---
+title: "MI predictions for SynCom grown in a soil microcosm"
+author: "Oriane Moyne"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(gplots)
+```
+
+#--------------------------------
+
+# Samples description
+
+Multi-omics: metagenomics (metaG), metatranscriptomics (metaT), metaRibo-Seq (metaRS) analysis of 2-days (T1), 4-days (T2), 7-days (T3) and 14 days (T4) of growth.  
+
+Samples are soil and soil + SynCom.
+#--------------------------------
+
+# Pathway Analysis
+
+## KEGG data
+
+```{r}
+# Count tables with taxonomy annotations (Woltka gotu output)
+syncom_KEGG <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Expt_2/Custom_index/MIND_Soil_SynCom_Custom_index_Expt2_count_table_RPKM_KEGG_noNA.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "")
+
+syncom_KEGG$genus_strain <- str_split(syncom_KEGG$genus_strain, "_", simplify = TRUE)[,1]
+syncom_KEGG$genus_strain[syncom_KEGG$genus_strain == "Chitinophagaceae"] <- "Niastella"
+```
+
+## Aggregate by pathway
+
+```{r, eval = TRUE}
+syncom_KEGG_id <- aggregate(syncom_KEGG[, 9:ncol(syncom_KEGG)], by = list(kegg = syncom_KEGG$pathway, genus_strain = syncom_KEGG$genus_strain), sum)
+```
+
+
+
+## TE calculation
+
+```{r, eval = TRUE}
+
+# Create separate matrices for each omic
+metaG_mat <- syncom_KEGG_id[, str_detect(colnames(syncom_KEGG_id), "metaG")]
+colnames(metaG_mat) <- str_replace(colnames(metaG_mat), "_metaG", "")
+metaT_mat <- syncom_KEGG_id[, str_detect(colnames(syncom_KEGG_id), "metaT")]
+colnames(metaT_mat) <- str_replace(colnames(metaT_mat), "_metaT", "")
+metaRS_mat <- syncom_KEGG_id[, str_detect(colnames(syncom_KEGG_id), "metaRS")]
+colnames(metaRS_mat) <- str_replace(colnames(metaRS_mat), "_metaRS", "")
+
+# order them the same
+metaRS_mat <- metaRS_mat[, colnames(metaT_mat)]
+metaG_mat <- metaG_mat[, colnames(metaT_mat)]
+
+# Rename columns
+colnames(metaG_mat) <- paste(colnames(metaT_mat), "metaG", sep = "_")
+colnames(metaT_mat) <- paste(colnames(metaT_mat), "metaT", sep = "_")
+colnames(metaRS_mat) <- paste(colnames(metaRS_mat), "metaRS", sep = "_")
+
+# -------------NICELY DONE HERE
+
+# Filter out low counts (< 10 RPKM for the whole pathway)
+metaG_mat[metaG_mat<10] <- 0
+metaRS_mat[metaRS_mat<10] <- 0
+metaT_mat[metaT_mat<10] <- 0
+
+TE_mat <- metaRS_mat / metaT_mat
+colnames(TE_mat) <- str_replace(colnames(TE_mat), "_metaRS", "_TE")
+
+# NaN produced when 0/0
+TE_mat[is.na(TE_mat)] <- 0
+
+# Inf produced when x/0
+is.na(TE_mat) <- sapply(TE_mat, is.infinite)
+TE_mat[is.na(TE_mat)] <- 0
+#TE_mat[TE_mat<1] <- 0
+
+TE_syncom <- data.frame(cbind(syncom_KEGG_id[, 1:2], TE_mat))
+```
+
+## PCA
+
+```{r}
+# Data formatting
+TE_pca <- TE_syncom
+rownames(TE_pca) <- paste(TE_pca[,2], TE_pca[,1], sep = "|")
+
+TE_pca <- TE_pca[, 3:ncol(TE_pca)]
+
+TE_pca <- data.frame(t(TE_pca))
+
+Condition <- str_split(rownames(TE_pca), "_", simplify = TRUE)[,2]
+Replicate <- str_split(rownames(TE_pca), "_", simplify = TRUE)[,4]
+Time <- str_split(rownames(TE_pca), "_", simplify = TRUE)[,3]
+
+TE_pca <- data.frame(cbind(Condition, Replicate, Time, TE_pca[, apply(TE_pca[,4:ncol(TE_pca)], 2, sum)>0]))
+TE_pca <- TE_pca[apply(TE_pca[,4:ncol(TE_pca)], 1, sum)>0, ]
+```
+
+
+```{r}
+# TE_pca <- TE_pca[TE_pca$Time == "T3", ]
+
+pca <- PCA(log(TE_pca[, 4:ncol(TE_pca)] + 1), 
+           # quali.sup = c(1:3),
+           scale.unit = FALSE, 
+           graph = FALSE
+           )
+
+fviz_pca_ind(pca,
+             habillage = TE_pca$Condition, 
+             geom = c("point", "text")
+             )
+
+# Is Soil_01x_T3_1 outlier?
+pca <- PCA(log(TE_pca[TE_pca$Condition == "01x", 4:ncol(TE_pca)] + 1), 
+                      # quali.sup = c(1:3),
+           scale.unit = FALSE, 
+           graph = FALSE
+           )
+
+fviz_pca_ind(pca,
+             habillage = TE_pca[TE_pca$Condition == "01x", ]$Time, 
+             geom = c("point", "text"), 
+             repel = TRUE
+             )
+
+fviz_pca_biplot(pca, select.var = list(contrib = 5), repel = TRUE)
+# Soil_01x_T3_1 outlier. Remove?
+
+
+pca <- PCA(log(TE_pca[TE_pca$Condition == "SynCom", 4:ncol(TE_pca)] + 1), 
+                      # quali.sup = c(1:3),
+           scale.unit = FALSE, 
+           graph = FALSE
+           )
+
+fviz_pca_ind(pca,
+             habillage = TE_pca[TE_pca$Condition == "SynCom", ]$Time, 
+             geom = c("point", "text"), 
+             repel = TRUE
+             )
+
+fviz_pca_biplot(pca, select.var = list(contrib = 5), repel = TRUE)
+
+
+
+
+TE_syncom[order(TE_syncom$Soil_01x_T3_1_TE, decreasing = TRUE), ]
+
+```
+
+# Microbial Niche Determination (MIND) algorithm  
+
+- Average replicate
+- Make table with rows = bacteria, columns = pathways
+- PCA
+- HCPC (Hierarchical clustering on the principal components): creates guilds of bacteria that prioritize the same pathways
+
+
+## TE
+
+```{r}
+TE_pca <- TE_syncom[, colnames(TE_syncom)%in%c("Soil_SynCom_T1_1_TE", "Soil_SynCom_T1_2_TE")]
+TE_pca <- TE_syncom[, colnames(TE_syncom)%in%c("Soil_SynCom_T2_1_TE", "Soil_SynCom_T2_2_TE")]
+# TE_pca <- TE_syncom[, colnames(TE_syncom)%in%c("Soil_SynCom_T3_1_TE", "Soil_SynCom_T3_2_TE")]
+
+TE_pca <- apply(TE_pca, 1, mean)
+
+
+TE_pca <- data.frame(cbind(TE_syncom[, c("kegg", "genus_strain")], TE = TE_pca))
+
+TE_pca <- reshape(TE_pca,
+        direction = "wide", 
+        idvar = "genus_strain", 
+        timevar = "kegg")
+
+TE_pca[is.na(TE_pca)] <- 0
+
+rownames(TE_pca) <- TE_pca$genus_strain
+TE_pca <- TE_pca[, !colnames(TE_pca) == "genus_strain"]
+
+TE_pca <- TE_pca[apply(TE_pca, 1, sum)!=0, ]
+TE_pca <- TE_pca[, apply(TE_pca, 2, sum)!=0]
+
+colnames(TE_pca) <- gsub("TE.", "", colnames(TE_pca))
+colnames(TE_pca) <- str_split(colnames(TE_pca), "\\[", simplify = TRUE)[,1]
+
+summary(TE_pca[TE_pca>0])
+```
+
+PCA
+
+```{r,  fig.height=4.5, fig.width=6.5}
+pca <- PCA(log(TE_pca + 0.01), 
+           scale.unit = FALSE, 
+           graph = FALSE, 
+           ncp = 5
+           )
+
+var_explained <- data.frame(pca$eig)
+var_explained$PC <- rownames(var_explained)
+var_explained$PC <- ordered(var_explained$PC, levels = unique(var_explained$PC))
+
+ggplot(var_explained, aes(x = PC, y = percentage.of.variance)) +
+  geom_bar(stat = "identity") +
+    geom_vline(xintercept = 5.5, col = "red")
+```
+
+
+```{r,  fig.height=4.5, fig.width=6.5}
+fviz_pca_ind(pca,
+             geom = c("point", "text"), 
+             repel = TRUE
+             )
+
+fviz_pca_biplot(pca,
+             geom = c("point", "text"), 
+             repel = TRUE, 
+             select.var = list(contrib=15), 
+             col.ind = "grey", 
+             col.var = "black"
+             )
+
+
+TE_clust <- HCPC(pca, 
+                 nb.clust = -1, 
+                 metric = "euclidean", 
+                 method = "ward"
+                 )
+
+options(ggrepel.max.overlaps = Inf)
+
+image <- fviz_cluster(TE_clust, repel = TRUE, labelsize = 13, 
+                      ggtheme = theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92")) 
+                              ) 
+image
+# library(svglite)
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/")
+# ggsave(file="MEND_clusterplot_white.svg", plot=image, height = 4.5, width = 6.5, dpi = 600)
+```
+
+
+```{r}
+tree <- hclust(dist(pca$ind$coord, method = "euclidean"), method = "ward.D2")
+cutree(tree, k = 6)
+plot(x = tree, labels =  row.names(tree), cex = 1)
+plot(x = tree, labels =  row.names(tree), cex = 1, hang = -1)
+# 
+
+library(dendextend)
+
+plot(rotate(tree, c(1, 9:10, 2:6, 8, 7, 11:13, 15, 14)), hang = -1)
+# 
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# svg("guilds_Soil_SynCom_T2_log001.svg", height = 4.5, width = 6)
+# plot(x = tree, labels =  row.names(tree), cex = 1, hang = -1)
+# dev.off()
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# svg("guilds_Soil_SynCom_T2.svg", height = 4.5, width = 6)
+# plot(rotate(tree, c(1, 9:10, 2:6, 8, 7, 11:13, 15, 14)), hang = -1, font = 3)
+# dev.off()
+```
+
+
+
+### Predicting competition: Distance matrix analysis
+
+```{r, fig.height=7, fig.width=8}
+hclustfunc <- function(x) hclust(x, method="ward.D2") # clustering ward
+distfunc <- function(x) dist(x, method="euclidean")   # distances euclidiennes 
+
+distmat <- as.data.frame(as.matrix(dist(pca$ind$coord, method = "euclidean")))
+
+distmat[distmat == 0] <- NA
+
+distmat <- distmat[c("Paenibacillus", "Chitinophaga", "Mucilaginibacter", "Marmoricola", "Bosea", "Brevibacillus", "Bradyrhizobium", "Niastella", "Methylobacterium", "Arthrobacter", "Variovorax", "Burkholderia", "Rhizobium", "Rhodococcus", "Lysobacter"), 
+                   c("Paenibacillus", "Chitinophaga", "Mucilaginibacter", "Marmoricola", "Bosea", "Brevibacillus", "Bradyrhizobium", "Niastella", "Methylobacterium", "Arthrobacter", "Variovorax", "Burkholderia", "Rhizobium", "Rhodococcus", "Lysobacter")]
+
+distmat <- distmat[c("Paenibacillus", "Bosea", "Brevibacillus",  "Marmoricola", "Methylobacterium", "Niastella", "Arthrobacter", "Bradyrhizobium", "Lysobacter",  "Burkholderia", "Rhizobium", "Variovorax", "Rhodococcus", "Chitinophaga", "Mucilaginibacter"), 
+                   c("Paenibacillus", "Bosea", "Brevibacillus",  "Marmoricola", "Methylobacterium", "Niastella", "Arthrobacter", "Bradyrhizobium", "Lysobacter",  "Burkholderia", "Rhizobium", "Variovorax", "Rhodococcus", "Chitinophaga", "Mucilaginibacter")]
+
+heatmap.2(as.matrix(distmat),
+          trace = "none",
+          #Rowv = FALSE,
+          #Colv = FALSE,
+          margins = c(10,10),
+          col=redblue,
+          scale = "none",
+          na.color = "black"
+)
+```
+
+## SCORE
+
+```{r, fig.height=7, fig.width=7}
+
+# -(Z-score of distances)
+score <- data.frame(t(apply(distmat, 1, function(x) - (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))))
+
+apply(score, 1, function(x)sum(x, na.rm = TRUE))
+score
+
+cool = rainbow(50, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
+warm = rainbow(50, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
+cols = c(rev(cool), rep("white", 3), rev(warm))
+mypalette <- colorRampPalette(cols)(258)
+mypalette <- colorRampPalette(cols)(51)
+mypalette <- colorRampPalette(cols)(31)
+mypalette <- colorRampPalette(cols)(11)
+
+
+
+  # setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+  # svg("competition_scores_SynCominSoil2.svg")
+heatmap.2(as.matrix(score), 
+          trace = "none", 
+          Rowv = FALSE,
+          Colv = FALSE, 
+          margins = c(10,10), 
+         col = mypalette, 
+          labCol=as.expression(lapply(colnames(score), function(a) bquote(italic(.(a))))),
+          labRow=as.expression(lapply(rownames(score), function(a) bquote(italic(.(a))))),
+         scale = "none", 
+         na.color = "black", 
+         key.xlab = "Competition Score", 
+         lhei = c(1,3.5), lwid = c(1,3.5), 
+         density.info = "none"
+)
+ # dev.off()
+```
+
+
+
+
+
+
+
+
+## Export tables cluster description
+
+```{r}
+cluster1_description <- data.frame(TE_clust$desc.var$quanti$`1`)
+rownames(cluster1_description) <- str_replace(rownames(cluster1_description), "TE.", "")
+cluster1_description$padj <- p.adjust(cluster1_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster1_description$kegg <- rownames(cluster1_description)
+
+cluster2_description <- data.frame(TE_clust$desc.var$quanti$`2`)
+rownames(cluster2_description) <- str_replace(rownames(cluster2_description), "TE.", "")
+cluster2_description$padj <- p.adjust(cluster2_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster2_description$kegg <- rownames(cluster2_description)
+
+cluster3_description <- data.frame(TE_clust$desc.var$quanti$`3`)
+rownames(cluster3_description) <- str_replace(rownames(cluster3_description), "TE.", "")
+cluster3_description$padj <- p.adjust(cluster3_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster3_description$kegg <- rownames(cluster3_description)
+
+cluster4_description <- data.frame(TE_clust$desc.var$quanti$`4`)
+rownames(cluster4_description) <- str_replace(rownames(cluster4_description), "TE.", "")
+cluster4_description$padj <- p.adjust(cluster4_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster4_description$kegg <- rownames(cluster4_description)
+
+cluster5_description <- data.frame(TE_clust$desc.var$quanti$`5`)
+rownames(cluster5_description) <- str_replace(rownames(cluster5_description), "TE.", "")
+cluster5_description$padj <- p.adjust(cluster5_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster5_description$kegg <- rownames(cluster5_description)
+
+cluster6_description <- data.frame(TE_clust$desc.var$quanti$`6`)
+rownames(cluster6_description) <- str_replace(rownames(cluster6_description), "TE.", "")
+cluster6_description$padj <- p.adjust(cluster6_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster6_description$kegg <- rownames(cluster6_description)
+
+cluster7_description <- data.frame(TE_clust$desc.var$quanti$`7`)
+rownames(cluster7_description) <- str_replace(rownames(cluster7_description), "TE.", "")
+cluster7_description$padj <- p.adjust(cluster7_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster7_description$kegg <- rownames(cluster7_description)
+
+cluster8_description <- data.frame(TE_clust$desc.var$quanti$`8`)
+rownames(cluster8_description) <- str_replace(rownames(cluster8_description), "TE.", "")
+cluster8_description$padj <- p.adjust(cluster8_description$p.value, method = "fdr", n = ncol(TE_clust$data.clust))
+cluster8_description$kegg <- rownames(cluster8_description)
+
+cluster1_description
+cluster2_description
+cluster3_description
+cluster4_description
+cluster5_description
+cluster6_description
+cluster7_description
+cluster8_description
+```
+
+
+```{r}
+TE_clust$data.clust <- TE_clust$data.clust[order(TE_clust$data.clust$clust), ]
+
+colnames(TE_clust$data.clust) <- str_replace(colnames(TE_clust$data.clust), "TE.", "")
+colnames(TE_clust$data.clust) <- gsub(" ", ".", colnames(TE_clust$data.clust))
+
+
+sig_TE <- TE_clust$data.clust[, colnames(TE_clust$data.clust)%in%rownames(cluster1_description[cluster1_description$padj<0.05,])|
+                      colnames(TE_clust$data.clust)%in%rownames(cluster2_description[cluster2_description$padj<0.05,])|
+                      colnames(TE_clust$data.clust)%in%rownames(cluster3_description[cluster3_description$padj<0.05,])|
+                      colnames(TE_clust$data.clust)%in%rownames(cluster4_description[cluster4_description$padj<0.05,])|
+                      colnames(TE_clust$data.clust)%in%rownames(cluster5_description[cluster5_description$padj<0.05,])|
+                      colnames(TE_clust$data.clust)%in%rownames(cluster6_description[cluster6_description$padj<0.05,])|
+                        colnames(TE_clust$data.clust)%in%rownames(cluster7_description[cluster7_description$padj<0.05,])|
+                        colnames(TE_clust$data.clust)%in%rownames(cluster8_description[cluster8_description$padj<0.05,])
+                      ]
+```
+
+```{r, fig.height=18, fig.width = 10, eval = FALSE}
+hclustfunc <- function(x) hclust(x, method="ward.D2") # Ward clustering 
+distfunc <- function(x) dist(x, method="euclidean")   # euclidean distances  
+
+# order as in MIND clustering
+sig_TE$Tax <- rownames(sig_TE)
+sig_TE$Tax <- ordered(sig_TE$Tax, levels = c("Paenibacillus",  "Chitinophaga", "Mucilaginibacter", "Marmoricola",  "Bosea",  "Brevibacillus",
+                                                 "Bradyrhizobium", "Niastella", "Methylobacterium", "Arthrobacter",
+                                                 "Variovorax", "Burkholderia", 
+                                                    "Rhizobium", "Rhodococcus", "Lysobacter"
+                                                ))
+
+sig_TE <- sig_TE[order(sig_TE$Tax), ]
+sig_TE <- sig_TE[, colnames(sig_TE)!="Tax"]
+
+heatmap.2(as.matrix(t(sig_TE)), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = bluered, 
+          scale = "row", 
+          #Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(12,28), 
+          lhei=c(1,9), lwid=c(2,8)
+          )
+```
+
