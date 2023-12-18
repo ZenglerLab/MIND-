@@ -1,0 +1,246 @@
+---
+title: "ND for SynCom grown in a soil microcosm"
+author: "Oriane Moyne"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Samples description
+
+Multi-omics: metagenomics (metaG), metatranscriptomics (metaT), metaRibo-Seq (metaRS) analysis of 4-days (T1) and 7-days (T2) growth SynCom.  
+
+- X1 and X2 samples: Full SynCom (16 strains)  
+- X3: SynCom - _Lysobacter_
+- X4: SynCom - _Mucilaginibacter_
+- X5: SynCom - _Burkholderia_
+- X6: SynCom - _Burkholderia_, _Rhizobium_, _Rhodocccus_, _Brevibacillus_.
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(gplots)
+```
+
+## Data import 
+
+```{r}
+# Count tables with taxonomy annotations (Woltka gotu output)
+syncom <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Expt_2/Custom_index/MIND_Soil_SynCom_Custom_index_Expt2_count_table_RPKM.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "")
+
+syncom$genus_strain <- str_split(syncom$genus_strain, "_", simplify = TRUE)[,1]
+
+syncom$genus_strain[syncom$genus_strain == "Chitinophagaceae"] <- "Niastella"
+```
+
+## Aggregate by strain
+
+```{r}
+syncom <- syncom[order(syncom$Soil_01x_T2_2_metaRS, decreasing = TRUE), ] #very high signal for 2 hypothetical proteins in Chitinophaga. Very short gene length - probably biased the RPKM normalization
+
+syncom[syncom$gene_name == "hypothetical protein", ]
+syncom <- syncom[syncom$gene != "ACPHPGFJ_01259", ]
+syncom <- syncom[syncom$gene != "ACPHPGFJ_01260", ]
+
+syncom_agg <- syncom[, c(4:ncol(syncom))]
+syncom_agg <- aggregate(syncom_agg[, 2:ncol(syncom_agg)], by = list(syncom_agg$genus_strain), sum)
+```
+
+Calculate average metagenomic abundances
+
+```{r}
+topSynCom <- data.frame(apply(syncom_agg[, str_detect(colnames(syncom_agg), "metaG") & str_detect(colnames(syncom_agg), "SynCom")], 2, function(x) x/sum(x) * 100))
+rownames(topSynCom) <- syncom_agg$Group.1
+apply(topSynCom, 1, mean)
+```
+
+# Check import proteins
+
+### Aggregate by gene name
+
+```{r}
+syncom <- aggregate(syncom[, 5:ncol(syncom)], by = list(syncom$gene_name, syncom$genus_strain), sum)
+# syncom <- syncom[syncom$Group.1 != "hypothetical protein", ]
+
+colnames(syncom) <- c("gene_name", "genus_strain", colnames(syncom)[3:ncol(syncom)])
+```
+
+# TE
+
+```{r, eval = TRUE}
+# Create separate matrices for each omic
+metaG_mat <- syncom[, str_detect(colnames(syncom), "metaG")]
+metaT_mat <- syncom[, str_detect(colnames(syncom), "metaT")]
+metaRS_mat <- syncom[, str_detect(colnames(syncom), "metaRS")]
+
+## Order them the same
+colnames(metaG_mat) <- str_split(colnames(metaG_mat), "_meta", simplify = TRUE)[,1]
+colnames(metaT_mat) <- str_split(colnames(metaT_mat), "_meta", simplify = TRUE)[,1]
+colnames(metaRS_mat) <- str_split(colnames(metaRS_mat), "_meta", simplify = TRUE)[,1]
+metaT_mat <- metaT_mat[, colnames(metaG_mat)]
+metaRS_mat <- metaRS_mat[, colnames(metaG_mat)]
+
+# For TE: filter out low metaRS counts
+# summary(metaRS_mat[metaRS_mat>0])
+# apply(metaRS_mat, 2, function(x)summary(x[x>0]))
+
+#metaRS_mat[metaRS_mat<10] <- 0
+#metaT_mat[metaT_mat<10] <- 0
+
+TE_mat <- metaRS_mat / metaT_mat
+colnames(TE_mat) <- paste(colnames(TE_mat), "TE", sep = "_")
+
+colnames(metaG_mat) <- paste(colnames(metaG_mat), "metaG", sep = "_")
+colnames(metaT_mat) <- paste(colnames(metaT_mat), "metaT", sep = "_")
+colnames(metaRS_mat) <- paste(colnames(metaRS_mat), "metaRS", sep = "_")
+
+# NaN produced when 0/0
+TE_mat[is.na(TE_mat)] <- 0
+
+# Inf produced when x/0
+is.na(TE_mat) <- sapply(TE_mat, is.infinite)
+TE_mat[is.na(TE_mat)] <- 0
+
+TE_syncom <- data.frame(cbind(syncom[, 1:2], TE_mat))
+
+syncom[str_detect(syncom$gene_name, "take")|str_detect(syncom$gene_name, "import"), ]
+```
+
+
+```{r}
+TE_import <- TE_syncom[str_detect(TE_syncom$gene_name, "take")|str_detect(TE_syncom$gene_name, "import"), colnames(TE_syncom)%in%c("Soil_SynCom_T2_1_TE", "Soil_SynCom_T2_2_TE", "Soil_SynCom_T3_1_TE", "Soil_SynCom_T3_2_TE")] #test
+# TE_import <- syncom[str_detect(syncom$gene_name, "take")|str_detect(syncom$gene_name, "import"), colnames(syncom)%in%c("Soil_01x_T3_1_metaRS", "Soil_01x_T3_2_metaRS", "Soil_SynCom_T3_1_metaRS", "Soil_SynCom_T3_2_metaRS")] #test
+# TE_import <- syncom[str_detect(syncom$gene_name, "take")|str_detect(syncom$gene_name, "import"), colnames(syncom)%in%c("Soil_SynCom_T2_1_metaT", "Soil_SynCom_T2_2_metaT", "Soil_SynCom_T3_1_metaT", "Soil_SynCom_T3_2_metaT")] #test
+TE_import <- syncom[str_detect(syncom$gene_name, "take")|str_detect(syncom$gene_name, "import"), colnames(syncom)%in%c("Soil_01x_T3_1_metaRS", "Soil_01x_T3_2_metaRS", "Soil_SynCom_T3_1_metaRS", "Soil_SynCom_T3_2_metaRS", "Soil_SynCom_T2_1_metaT", "Soil_SynCom_T2_2_metaT", "Soil_SynCom_T3_1_metaT", "Soil_SynCom_T3_2_metaT")] #test
+# TE_import <- syncom[str_detect(syncom$gene_name, "take")|str_detect(syncom$gene_name, "import"), colnames(syncom)%in%c("Soil_01x_T3_1_metaG", "Soil_01x_T3_2_metaG", "Soil_SynCom_T3_1_metaG", "Soil_SynCom_T3_2_metaG")] #test
+
+TE_import <- apply(TE_import, 1, mean)
+TE_import <- data.frame(cbind(TE_syncom[str_detect(TE_syncom$gene_name, "take")|str_detect(TE_syncom$gene_name, "import"), c("gene_name", "genus_strain")], TE_import))  #test
+
+TE_import <- reshape(TE_import,
+        direction = "wide", 
+        idvar = "genus_strain", 
+        timevar = "gene_name")
+
+TE_import[is.na(TE_import)] <- 0
+
+rownames(TE_import) <- TE_import$genus_strain
+TE_import <- TE_import[, !colnames(TE_import) == "genus_strain"]
+
+# TE_import <- TE_import[apply(TE_import, 1, sum)!=0, ]
+TE_import <- TE_import[, apply(TE_import, 2, sum)!=0]
+
+colnames(TE_import) <- str_replace(colnames(TE_import), "TE_import.", "")
+
+TE_import <- TE_import[, colnames(TE_import)%in%colnames(TE_import)]
+#TE_import[TE_import<1] <- 0
+
+TE_import$Tax <- rownames(TE_import)
+
+TE_import <- TE_import[order(TE_import$Tax), ]
+TE_import <- TE_import[, colnames(TE_import)!="Tax"]
+
+TE_import <- data.frame(t(TE_import))
+TE_import$gene <- rownames(TE_import)
+TE_import <- TE_import[sort(TE_import$gene), ]
+TE_import <- TE_import[, colnames(TE_import) != "gene"]
+
+TE_import <- data.frame(t(TE_import))
+TE_import$Tax <- rownames(TE_import)
+TE_import$Tax <- ordered(TE_import$Tax, levels = c("Paenibacillus", "Bosea", "Brevibacillus", "Marmoricola", "Methylobacterium",
+                                                      "Niastella", "Arthrobacter", "Bradyrhizobium", "Lysobacter", "Burkholderia","Rhizobium",  
+                                                      "Variovorax", "Rhodococcus",
+                                                      "Chitinophaga", "Mucilaginibacter",
+                                                       "Mycobacterium"
+                                                  ))
+
+TE_import <- TE_import[order(TE_import$Tax), ]
+TE_import <- TE_import[, colnames(TE_import)!="Tax"]
+TE_import <- data.frame(t(TE_import))
+
+```
+
+```{r, fig.height=7, fig.width = 10}
+tested_conditions <- TE_import[str_detect(rownames(TE_import), "ibose") | 
+                                 str_detect(rownames(TE_import), "ructose") |
+                                 str_detect(rownames(TE_import), "rehalose") |
+                                 str_detect(rownames(TE_import), "altose") |
+                                 str_detect(rownames(TE_import), "altodextrin") |
+                                 str_detect(rownames(TE_import), "lutathione") |
+                                 str_detect(rownames(TE_import), "hiosulfate") |
+                                 str_detect(rownames(TE_import), "utrescine"), ]
+
+cool = rainbow(50, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
+warm = rainbow(50, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
+mypalette <- colorRampPalette(c(rev(cool), "white", rev(warm)))(11)
+
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# svg("TE_Soil_SC_import_heatmap_TE_T2_T3.svg", height = 7, width = 10)
+  heatmap.2(as.matrix(tested_conditions), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = bluered,
+          # col = mypalette, 
+          scale = "row", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(13,28), 
+          lhei=c(1,5), lwid=c(1,5)
+          )
+  # dev.off()
+  
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# svg("TE_Soil_SC_import_heatmap_TE_T2_T3.svg", height = 7, width = 10)
+    heatmap.2(as.matrix(log(tested_conditions+0.001)), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = bluered,
+          # col = mypalette, 
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(13,28), 
+          lhei=c(1,5), lwid=c(1,5)
+          )
+    # dev.off()
+
+binary <- tested_conditions
+binary[binary > 0] <- 1
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# svg("TE_Soil_SC_import_heatmap_metaT_metaRS_binary_T2_T3.svg", height = 7, width = 10)
+heatmap.2(as.matrix(binary), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = c("lightskyblue", "red"),
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(13,28), 
+          lhei=c(1,5.5), lwid=c(1,5)
+          )
+# dev.off()
+```
+
+
