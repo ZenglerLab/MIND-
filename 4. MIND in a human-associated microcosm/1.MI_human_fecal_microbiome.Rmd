@@ -1,65 +1,480 @@
-
-```{r, eval = TRUE, fig.height = 4.5, fig.width=10}
-df_cpm <- df_cpm[df_cpm$species %in% rownames(score), ] #score created from script 3.KEGG_multiomics_BHI_final_Species.Rmd
-
-vec_col1 <- c("seagreen4", rev(cols)[1:3],
-             "orange1","orange2", "orange3",  
-              "olivedrab3",  "olivedrab4", 
-             "deeppink",
-              "darkgoldenrod1", "tomato", "plum3", "plum4",  
-           "gold",   "seagreen1",  "dodgerblue",   
-             "hotpink", "hotpink3", 
-             "violetred4", 
-           "turquoise1", "turquoise3",
-           "grey")
+---
+title: "Microbial Interactions in infant fecal microcosm"
+author: "Oriane Moyne"
+date: "5/1/2023"
+output: html_document
+---
 
 
-xyl1 <- ggplot(df_cpm, aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1)) + 
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(data.table)
+library(dplyr)
+library(gplots)
+library(tidyr)
+library(vegan)
+```
+
+## Data import
+
+```{r}
+data <- fread("/home/moyne/Moyne_disk/MOMI_2020/MI04_prebiotics_test/multiomics_batch2_BHI/WoL_subset_NEW/counts_species_uniref.tsv/counts_species_uniref.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = "", 
+                   check.names = FALSE)
+
+data <- as.data.frame(data)
+colnames(data) <- str_replace(colnames(data), "mi04t", "MI04T")
+colnames(data)[1] <- "FeatureID"
+
+
+# Two samples (fru_1 and ref_1) have been swapped in the BHI experiment: See Chloe's lab notebook
+colnames(data)[colnames(data) == "MI04T1_fru_1_metaG"] <- "mi04t2_ref_1_metaG"
+colnames(data)[colnames(data) == "MI04T2_ref_1_metaG"] <- "mi04t1_fru_1_metaG"
+
+colnames(data)[colnames(data) == "MI04T1_fru_1_metaT"] <- "mi04t2_ref_1_metaT"
+colnames(data)[colnames(data) == "MI04T2_ref_1_metaT"] <- "mi04t1_fru_1_metaT"
+
+colnames(data)[colnames(data) == "MI04T1_fru_1_metaRS"] <- "mi04t2_ref_1_metaRS"
+colnames(data)[colnames(data) == "MI04T1_fru_2_metaRS"] <- "mi04t2_ref_2_metaRS"
+colnames(data)[colnames(data) == "MI04T1_fru_3_metaRS"] <- "mi04t2_ref_3_metaRS"
+
+colnames(data)[colnames(data) == "MI04T2_ref_1_metaRS"] <- "mi04t1_fru_1_metaRS"
+colnames(data)[colnames(data) == "MI04T2_ref_2_metaRS"] <- "mi04t1_fru_2_metaRS"
+colnames(data)[colnames(data) == "MI04T2_ref_3_metaRS"] <- "mi04t1_fru_3_metaRS"
+
+colnames(data) <- str_replace(colnames(data), "mi04t", "MI04T")
+colnames(data) <- str_split(colnames(data), "_wol", simplify = TRUE)[, 1]
+
+# Add columns
+data$species <- str_split(data$FeatureID, "\\|", simplify = TRUE)[, 1]
+data$uniref <- str_split(data$FeatureID, "\\|", simplify = TRUE)[, 2]
+
+# reorder columns alphabetically 
+colnames(data) <- str_replace(colnames(data), "fru", "zfru")
+data <- data[, c("FeatureID", "species", "uniref", "Name", sort(colnames(data)[str_detect(colnames(data), "meta")]))]
+colnames(data) <- str_replace(colnames(data), "zfru", "fru")
+
+ # keep only data from the tested sample
+data <- data[, !str_detect(colnames(data), "MI04T2")]
+data <- data[, !str_detect(colnames(data), "fru")]
+```
+
+```{r}
+# Note: metaG samples have been sequenced twice: once shallow, once deep. keep deep only
+shallow <- data[, str_detect(colnames(data), "metaG") & as.numeric(str_split(colnames(data)[str_detect(colnames(data), "metaG")], "_S", simplify = TRUE)[, 2]) < 95]
+data <- data[, !colnames(data) %in% colnames(shallow)]
+
+colnames(data) <- str_split(colnames(data), "_S", simplify = TRUE)[, 1]
+```
+
+
+
+Normalization
+
+```{r}
+# Counts per million
+data_cpm <- data
+
+# data_cpm <- aggregate(data_cpm[, 5:ncol(data_cpm)], by = list(species = data_cpm$species, Name = data_cpm$Name), sum)
+
+data_cpm[, 5:ncol(data_cpm)] <- apply(data_cpm[, 5:ncol(data_cpm)], 2, function(x) x/sum(x) * 1000000)
+```
+
+
+
+## TE calculation 
+
+```{r, eval = TRUE}
+# Create separate matrices for each omic
+metaG_mat <- data_cpm[, str_detect(colnames(data_cpm), "metaG")]
+colnames(metaG_mat) <- str_replace(colnames(metaG_mat), "_metaG", "")
+metaT_mat <- data_cpm[, str_detect(colnames(data_cpm), "metaT")]
+colnames(metaT_mat) <- str_replace(colnames(metaT_mat), "_metaT", "")
+metaRS_mat <- data_cpm[, str_detect(colnames(data_cpm), "metaRS")]
+colnames(metaRS_mat) <- str_replace(colnames(metaRS_mat), "_metaRS", "")
+
+# order them the same
+metaRS_mat <- metaRS_mat[, colnames(metaT_mat)]
+metaG_mat <- metaG_mat[, colnames(metaT_mat)]
+
+# Rename columns
+colnames(metaG_mat) <- paste(colnames(metaT_mat), "metaG", sep = "_")
+colnames(metaT_mat) <- paste(colnames(metaT_mat), "metaT", sep = "_")
+colnames(metaRS_mat) <- paste(colnames(metaRS_mat), "metaRS", sep = "_")
+
+
+metaG_mat[metaG_mat<1] <- 0
+metaRS_mat[metaRS_mat<1] <- 0
+metaT_mat[metaT_mat<1] <- 0
+
+
+table(metaRS_mat[metaRS_mat == 0])
+metaRS_mat[metaT_mat < 1] <- 0
+table(metaRS_mat[metaRS_mat == 0])
+
+TE_mat <- metaRS_mat / metaT_mat
+colnames(TE_mat) <- str_replace(colnames(TE_mat), "_metaRS", "_TE")
+
+# NaN produced when 0/0
+TE_mat[is.na(TE_mat)] <- 0
+
+# Inf produced when x/0
+is.na(TE_mat) <- sapply(TE_mat, is.infinite)
+TE_mat[is.na(TE_mat)] <- 0
+#TE_mat[TE_mat<1] <- 0
+
+data_cpm <- data.frame(cbind(data_cpm[, 1:4], metaG_mat, metaT_mat, metaRS_mat, TE_mat))
+```
+
+
+
+```{r, fig.width = 12, fig.height = 4}
+vec_col <- c("seagreen4",
+              "#2171B5",
+             "darkorange2", "olivedrab3",  "midnightblue", "deeppink",
+              "paleturquoise4",    "orange", "orchid3",
+           "gold","dodgerblue",  "mediumpurple3", 
+           "hotpink2","green3", "tomato", 
+           "violetred4",  "khaki2", "darkslateblue", "turquoise3", 
+           "seagreen3", 
+           "grey", "black")
+
+df_agg <- aggregate(data_cpm[, 5:ncol(data_cpm)], by = list(species = data_cpm$species), sum)
+df_agg <- df_agg[, !str_detect(colnames(df_agg), "_TE")]
+
+df_agg$average_metaG <- apply(df_agg[, str_detect(colnames(df_agg), "MI04")], 1, mean)
+df_agg <- df_agg[order(df_agg$average_metaG, decreasing = TRUE), ]
+top20 <- df_agg$species[1:20]
+
+df_agg$top <- ifelse(df_agg$species %in% top20, df_agg$species, "other")
+
+# reorder alphabetically
+df_agg <- df_agg[order(df_agg$species), ]
+df_agg$top <- ordered(df_agg$top, levels = c(as.character(unique(df_agg$top[df_agg$top!="other"])) , "other"))
+
+df_plots <- reshape::melt(df_agg)
+colnames(df_plots) <- c("Taxon", "top", "Sample", "count")
+df_plots <- df_plots[order(df_plots$Taxon), ]
+df_plots <- df_plots[!str_detect(df_plots$Sample, "average"), ]
+df_plots$Sample <- as.character(df_plots$Sample)
+
+df_plots$indiv <- str_split(df_plots$Sample, "_", simplify = TRUE)[,1]
+df_plots$prebiotic <- str_split(df_plots$Sample, "_", simplify = TRUE)[,2]
+df_plots$replicate <- str_split(df_plots$Sample, "_", simplify = TRUE)[,3]
+df_plots$omic <- str_split(df_plots$Sample, "_", simplify = TRUE)[,4]
+
+df_plots$omic <- ordered(df_plots$omic, levels = c("metaG", "metaT", "metaRS"))
+
+
+df_plots$Sample <- str_split(df_plots$Sample, "_meta", simplify = TRUE)[,1]
+
+ggplot(df_plots, aes(fill=top, y=count, x=Sample)) +
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col) +
+     facet_wrap(.~ indiv + omic, ncol = 3, scales = "free") +
+   theme(text = element_text(size = 15)) +
+      labs(y = "Relative Abundance") +
+       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+# -------------------------------------------------
+
+# KEGG-Uniref90 database annotation
+
+```{r, eval = TRUE}
+keggwol <- read.table("/home/moyne/Moyne_disk/Databases/ko_kegg_uniref_pathway_manuallycurated.tsv", 
+                    sep="\t", dec=".", header = TRUE, stringsAsFactors = FALSE, na.strings = "", 
+                    fill = TRUE)
+
+table(data_cpm$uniref %in% keggwol$uniref)
+keggwol <- keggwol[keggwol$uniref %in% data_cpm$uniref, ]  # keep only relevant
+```
+
+I manually curated (roughly) a database that maps all Uniref protein IDs to KEGG pathways. This allows to get more detailed pathway information than what is in the WoL database. 
+
+```{r}
+keggs <- read.table("/home/moyne/Moyne_disk/Databases/kegg/kegg_classification_grouped_by_CAT_PATH_format8.csv", 
+                    sep=c(";", ","), dec=".", header = TRUE, stringsAsFactors = FALSE, na.strings = "", quote = "", 
+                    fill = TRUE)
+
+keggs[!str_detect(keggs$kegg, "K0")  & !str_detect(keggs$kegg, "K1") & !str_detect(keggs$kegg, "K2") & !str_detect(keggs$kegg, "M0"), ]
+
+genes_KEGG <- merge(keggwol, keggs, by = "kegg", all = TRUE)
+
+genes_KEGG <- genes_KEGG[!is.na(genes_KEGG$uniref), ]
+
+table(is.na(genes_KEGG$pathway.x))
+table(is.na(genes_KEGG$subcategory))
+
+# Examples deeper annotation:
+table(genes_KEGG[genes_KEGG$uniref == "Q32BA3", ]$pathway.x, genes_KEGG[genes_KEGG$uniref == "Q32BA3", ]$subcategory)
+table(genes_KEGG[genes_KEGG$uniref == "Q32BA3", ]$pathway.x, genes_KEGG[genes_KEGG$uniref == "Q32BA3", ]$pathway.y)
+
+table(genes_KEGG[genes_KEGG$uniref == "A0A1J1EII0", ]$pathway.x, genes_KEGG[genes_KEGG$uniref == "A0A1J1EII0", ]$subcategory)
+table(genes_KEGG[genes_KEGG$uniref == "A0A1J1EII0", ]$pathway.x, genes_KEGG[genes_KEGG$uniref == "A0A1J1EII0", ]$pathway.y)
+```
+
+
+
+## Merge count table with KEGG annotation 
+
+```{r}
+datakegg_wol <- merge(keggwol, data_cpm, by = "uniref", all.y = TRUE)
+datakegg <- merge(genes_KEGG, data_cpm, by.x = "uniref", by.y = "uniref", all.y = TRUE)
+
+datakegg_wol[!is.na(datakegg_wol$kegg), ]
+datakegg[!is.na(datakegg$kegg), ]
+
+table(datakegg_wol[!is.na(datakegg_wol$kegg), ]$species)
+table(datakegg[!is.na(datakegg$kegg), ]$species)
+
+### Instruction
+### 1) find out the % of genes that get a kegg annotation
+nrow(datakegg_wol[!is.na(datakegg_wol$kegg), ]) / nrow(datakegg_wol) * 100 # 32%
+nrow(datakegg[!is.na(datakegg$kegg), ]) / nrow(datakegg) * 100 # 45%
+
+### 2) what proportion of the total counts for each -omic does it represent?
+sum(datakegg_wol[!is.na(datakegg_wol$kegg), str_detect(colnames(datakegg_wol), "MI04")]) / sum(datakegg_wol[, str_detect(colnames(datakegg_wol), "MI04")]) * 100 # 39%
+sum(datakegg[!is.na(datakegg$kegg), str_detect(colnames(datakegg), "MI04")]) / sum(datakegg[, str_detect(colnames(datakegg), "MI04")]) * 100 # 52%
+```
+
+Annotation with datakegg looks more complete and more detailed than datakegg_wol. 
+
+
+
+### Aggregate
+
+```{r, fig.height=4, eval = TRUE}
+datakegg <- datakegg[!is.na(datakegg$kegg), ]
+datakegg_agg <- datakegg[!is.na(datakegg$pathway.y), ]
+# datakegg_agg$species <- str_split(datakegg_agg$species, " ", simplify = TRUE)[, 1] # genus level 
+
+datakegg_agg1 <- aggregate(datakegg_agg[, str_detect(colnames(datakegg_agg), "meta")], by = list(datakegg_agg$species, datakegg_agg$pathway.y), sum)
+datakegg_agg2 <- aggregate(datakegg_agg[, str_detect(colnames(datakegg_agg), "TE")], by = list(datakegg_agg$species, datakegg_agg$pathway.y), sum)
+
+datakegg_agg <- data.frame(cbind(datakegg_agg1, datakegg_agg2[, 3:ncol(datakegg_agg2)]))
+
+colnames(datakegg_agg) <- c("species", "pathway", colnames(datakegg_agg)[3:ncol(datakegg_agg)])
+datakegg_agg$pathway <- str_split(datakegg_agg$pathway, " \\[PATH", simplify = TRUE)[, 1]
+```
+
+
+
+
+# Microbial Interactions (MI) predictions
+
+- Average replicate
+- Make table with rows = bacteria, columns = pathways
+- PCA
+- HCPC (Hierarchical clustering on the principal components): creates guilds of bacteria that prioritize the same pathways
+
+
+## TE
+
+```{r}
+TE_BHI <- datakegg_agg[, !str_detect(colnames(datakegg_agg), "metaG") & !str_detect(colnames(datakegg_agg), "metaT") & !str_detect(colnames(datakegg_agg), "metaRS")]
+
+# TE_BHI <- TE_BHI[TE_BHI$species %in% top30, ]
+
+rownames(TE_BHI) <- paste(TE_BHI[, 1], TE_BHI[, 2], sep = "|")
+TE_pca <- TE_BHI[, str_detect(colnames(TE_BHI), "MI04T1_ref")]
+
+
+TE_pca <- apply(TE_pca, 1, mean)
+
+
+TE_pca <- data.frame(cbind(TE_BHI[, c("species", "pathway")], TE = TE_pca))
+
+TE_pca <- reshape(TE_pca,
+        direction = "wide", 
+        idvar = "species", 
+        timevar = "pathway")
+
+TE_pca[is.na(TE_pca)] <- 0
+
+rownames(TE_pca) <- TE_pca$species
+TE_pca <- TE_pca[, !colnames(TE_pca) == "species"]
+
+sort(apply(TE_pca, 1, sum))
+quantile(apply(TE_pca, 1, sum), seq(0,1,0.1))
+
+TE_pca <- TE_pca[apply(TE_pca, 1, sum)>0, ]
+
+sort(apply(TE_pca, 1, sum))
+quantile(apply(TE_pca, 1, sum), seq(0,1,0.1))
+
+TE_pca <- TE_pca[apply(TE_pca, 1, sum)>25, ] # good filters for TE
+TE_pca <- TE_pca[, apply(TE_pca, 2, sum)>1]
+
+
+colnames(TE_pca) <- gsub("TE.", "", colnames(TE_pca))
+colnames(TE_pca) <- str_split(colnames(TE_pca), "\\[", simplify = TRUE)[,1]
+
+summary(TE_pca[TE_pca>0])
+```
+
+PCA
+
+```{r,  fig.height=4.5, fig.width=6.5}
+pca <- PCA(log(TE_pca + 0.01), 
+           scale.unit = FALSE, 
+           graph = TRUE, 
+           ncp = 5
+           )
+
+var_explained <- data.frame(pca$eig)
+var_explained$PC <- rownames(var_explained)
+var_explained$PC <- ordered(var_explained$PC, levels = unique(var_explained$PC))
+
+ggplot(var_explained, aes(x = PC, y = percentage.of.variance)) +
+  geom_bar(stat = "identity") +
+    geom_vline(xintercept = 5.5, col = "red")
+```
+
+
+```{r,  fig.height=4.5, fig.width=6}
+fviz_pca_ind(pca,
+             geom = c("point", "text"), 
+             repel = TRUE
+             )
+```
+
+
+```{r, fig.width = 10, fig.height = 6}
+tree <- hclust(dist(pca$ind$coord, method = "euclidean"), method = "ward.D2")
+cutree(tree, k = 6)
+plot(x = tree, labels =  row.names(tree), cex = 1, hang = -1, font = 3)
+# 
+# setwd("/home/moyne/Moyne_disk/MOMI_2020/MI04_prebiotics_test/multiomics_batch2_BHI/WoL_subset")
+# svg("guilds_TE_MI04T1_BHI_WolSubbset_5PCs.svg", height = 5, width = 6)
+# plot(x = tree, labels =  row.names(tree), cex = 1, hang = -1, font = 3)
+# dev.off()
+```
+
+
+
+### Predicting competition: Distance matrix analysis
+
+```{r, fig.height=8, fig.width=10}
+hclustfunc <- function(x) hclust(x, method="ward.D2") # clustering ward
+distfunc <- function(x) dist(x, method="euclidean")   # distances euclidiennes 
+
+distmat <- as.data.frame(as.matrix(dist(pca$ind$coord, method = "euclidean")))
+distmat[distmat == 0] <- NA
+
+heatmap.2(as.matrix(distmat),
+          trace = "none",
+          #Rowv = FALSE,
+          #Colv = FALSE,
+          hclustfun = hclustfunc, 
+          margins = c(10,10),
+          col=redblue,
+          scale = "none",
+          na.color = "black"
+)
+
+# setwd("/home/moyne/Moyne_disk/MOMI_2020/MI04_prebiotics_test/multiomics_batch2_BHI/WoL_subset/")
+# svg("Guilds_Dist_Heatmap_rowscaled_MI04T1.svg")
+
+heatmap.2(as.matrix(distmat),
+          trace = "none",
+          #Rowv = FALSE,
+          #Colv = FALSE,
+          hclustfun = hclustfunc, 
+          margins = c(10,10),
+          col=redblue,
+          scale = "row",
+          na.color = "black"
+)
+# dev.off()
+```
+
+## SCORE
+
+```{r, fig.height=7, fig.width=7}
+# -(Z-score of distances)
+score <- data.frame(t(apply(distmat, 1, function(x) - (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))))
+
+apply(score, 1, summary)
+score
+```
+
+
+```{r, fig.height=10, fig.width=10}
+
+cool = rainbow(50, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
+warm = rainbow(50, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
+cols = c(rev(cool), rep("white", 3), rev(warm))
+mypalette <- colorRampPalette(cols)(21)
+
+
+  # setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+  # svg("competition_scores_SynCominSoil2.svg")
+heatmap.2(as.matrix(score), 
+          trace = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE, 
+          margins = c(10,10), 
+         col = mypalette, 
+          labCol=as.expression(lapply(colnames(score), function(a) bquote(italic(.(a))))),
+          labRow=as.expression(lapply(rownames(score), function(a) bquote(italic(.(a))))),
+         scale = "none", 
+         na.color = "black", 
+         key.xlab = "Competition Score", 
+         lhei = c(1,3.5), lwid = c(1,3.5), 
+         density.info = "none"
+)
+ # dev.off()
+
+```
+
+
+```{r}
+# Create an empty list to store the results
+compet <- list()
+
+# Iterate over each row of the "score" matrix
+for (i in 1:nrow(score)) {
+  row_name <- rownames(score)[i]
   
-            # geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 6, shape = 8) +
-          geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum", "Bifidobacterium breve"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 6, shape = 8) +
+  # Extract column names for the current row and sort in decreasing order
+  ZZZZZ_compet <- colnames(sort(score[row_name, ], decreasing = TRUE))
   
-    geom_point(data = df_cpm[df_cpm$species %in% compet$`Bifidobacterium longum`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 5, shape = 6) +
-      geom_point(data = df_cpm[df_cpm$species %in% compet$`Bifidobacterium breve`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Xyl_T1), color = "gray14", size = 5, shape = 6) +
+  # Apply the additional transformations to the "ZZZZZ_compet" vector
+  ZZZZZ_compet <- str_replace(ZZZZZ_compet, "CAG.", "CAG:")
+  ZZZZZ_compet <- str_replace_all(ZZZZZ_compet, "\\.", " ")
+  ZZZZZ_compet <- str_replace_all(ZZZZZ_compet, "sp ", "sp.")
+  ZZZZZ_compet <- ZZZZZ_compet[!str_detect(ZZZZZ_compet, str_split(rownames(score)[i], "\\ ", simplify = TRUE)[, 1])][1:10] #top10
 
+  # Store the result in the list
+  compet[[row_name]] <- ZZZZZ_compet
+}
 
-  geom_point(size = 2.5, aes(color = top)) +
-  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
-  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
-  scale_color_manual(values = vec_col1) +
-  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
-    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=10), axis.title=element_text(size=12)) +
-  guides(color = guide_legend(ncol = 2)) +
+# Access the results for each row by row name
+# Example: compet[["ZZZZ"]]
 
-xlab("Control (CPM)") +
-  ylab("Xylose 5 g/L (CPM)") 
+compet
 
-fru1 <- ggplot(df_cpm, aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1)) + 
-  
-          geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum", "Klebsiella pneumoniae", "Enterococcus faecium", "Enterococcus faecalis", "Sellimonas intestinalis"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 6, shape = 8) +
-           # geom_point(data = df_cpm[df_cpm$species %in% c("Bifidobacterium longum", "Klebsiella pneumoniae"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "blue", size = 4, shape = 8) +
-  
-    geom_point(data = df_cpm[df_cpm$species %in% compet$`Enterococcus faecium`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 5, shape = 6) +
-      geom_point(data = df_cpm[df_cpm$species %in% compet$`Enterococcus faecalis` & !df_cpm$species %in% compet$`Enterococcus faecium`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 5, shape = 6) +
+#------
+sort(score["Enterococcus faecium", ], decreasing = TRUE)
+sort(score["Bifidobacterium longum", ], decreasing = TRUE)
+sort(score["Lactobacillus", ], decreasing = TRUE)
+sort(score["Collinsella", ], decreasing = TRUE)
 
-      geom_point(data = df_cpm[df_cpm$species %in% compet$`Bifidobacterium longum` & !df_cpm$species %in% compet$`Enterococcus faecium` & !df_cpm$species %in% compet$`Enterococcus faecalis`, ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "gray14", size = 5, shape = 6) +
+sort(score["Bacteroides", ], decreasing = TRUE)
+sort(score["Sellimonas", ], decreasing = TRUE)
+sort(score["Clostridium", ], decreasing = TRUE)
 
-             # geom_point(data = df_cpm[df_cpm$species %in% c("Clostridium paraputrificum"), ], aes(x = MI04T1_Ref_T1, y = MI04T1_Fru_T1), color = "black", size = 4, shape = 13) +
-
-  geom_point(size = 2.5, aes(color = top)) +
-  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
-  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
-  scale_color_manual(values = vec_col1) +
-  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
-    theme(legend.position = "right", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=10), axis.title=element_text(size=12)) +
-  guides(color = guide_legend(ncol = 2)) +
-
-xlab("Control (CPM)") +
-  ylab("Fructose 5 g/L (CPM)") 
 ```
