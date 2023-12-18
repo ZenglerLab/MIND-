@@ -319,11 +319,11 @@ primary_targets <- function(individual,           # e.g."T1"/"T2"
 ```{r}
 # fructose
 pt_fructose <- primary_targets("T1", 0, 'ructose', 'ructoselysine')
-write.csv(pt_fructose$res, "./out/tables/species_prokka_fructose.csv")
+# write.csv(pt_fructose$res, "./out/tables/species_prokka_fructose.csv")
 
 # xylose
 pt_xylose <- primary_targets("T1", 0, 'ylose', 'zzz')
-write.csv(pt_xylose$res, "./out/tables/species_prokka_xylose.csv")
+# write.csv(pt_xylose$res, "./out/tables/species_prokka_xylose.csv")
 
 pt_fructose
 pt_xylose
