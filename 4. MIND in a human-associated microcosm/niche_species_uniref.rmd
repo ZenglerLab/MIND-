@@ -184,7 +184,7 @@ molten %>%
   filter(
     grepl('ructose', gene),
     !grepl('ructoselysine', gene),
-    !grepl("Drancourtella", genus),
+    !grepl("Drancourtella", genus), # select species to exclude, see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8116674/
     grepl("T1", variable),      # select individual
     omic == "TE",               # select omics
     condition == "BHI",         # select condition
