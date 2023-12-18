@@ -116,7 +116,7 @@ ggplot(data_plots, aes(fill=Taxon, y=count, x=Replicate)) +
 
 Replicates looks good. Important differences between samples and time points.  
 
-## Community 1: Full community (Supp. Fig. S1 a)
+## Community 1: Full community 
 
 ```{r, fig.height=6, fig.width=4}
 vec_col1 <- c("seagreen4", "gold", "brown1", "darkmagenta",
@@ -156,7 +156,7 @@ ggplot(data_plots[data_plots$Time == "T1"&data_plots$Community%in%c(1), ], aes(f
 ```
 Replicates are very similar. 
 
-### Abundance plot averages (Figure 2 b)
+### Abundance plot averages 
 
 ```{r, fig.height=2.5, fig.width=3.5}
 image <-  ggplot(data_plots[data_plots$Time == "T1"&data_plots$Community%in%c(1), ], aes(fill=Taxon, y=count, x=Community)) +
@@ -189,7 +189,7 @@ image
 
 # Select Time 2: 7 days of growth  
 
-More diversity, slow grtowers had time to grow. 
+More diversity, slow growers had time to grow. 
 
 ```{r}
 data_plots <- data_plots[data_plots$Time == "T2", ]
@@ -432,134 +432,9 @@ muci
 ```
 
 
-## Other -omics
-
-Is overall transcriptional and translational activity of competitors increased as well as metagenomics abundance?
-
-### Subset of figure 2 e
-
-```{r, fig.width=3, fig.height = 2.5}
-bur_metaT <- ggplot(test[test$Group.1 != "Burkholderia", ], aes(x = X1_av_T2_metaT, y = X4_av_T2_metaT)) +
-  geom_point(aes(color = Group.1), size = 3) +
-  scale_x_sqrt() +
-  scale_y_sqrt() +
-  scale_color_manual(values = vec_col5) +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-     theme(legend.position = "none", axis.title=element_text(size=11)) +
-    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
-  xlab("SynCom (RPKM)") +
-  ylab(expression(paste("", italic("- Burkholderia"), " (RPKM)"))) +  
-      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +
-  geom_point(aes(x = test[test$Group.1 == "Burkholderia", ]$X1_av_T2_metaT, y = test[test$Group.1 == "Burkholderia", ]$X4_av_T2_metaT), color = "dodgerblue", shape = 8, size = 2.5)
-
-bur_metaT
-
-
-lys_metaT <- ggplot(test[test$Group.1 != "Lysobacter", ], aes(x = X1_av_T2_metaT, y = X2_av_T2_metaT)) +
-  geom_point(aes(color = Group.1), size = 3) +
-  scale_x_sqrt() +
-  scale_y_sqrt() +
-  scale_color_manual(values = vec_col3) +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-   # stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
-  xlab("SynCom (RPKM)") +
-  ylab(expression(paste("", italic("- Lysobacter"), " (RPKM)"))) +  
-  geom_point(aes(x = test[test$Group.1 == "Lysobacter", ]$X1_av_T2_metaT, y = test[test$Group.1 == "Lysobacter", ]$X2_av_T2_metaT), color = "midnightblue", shape = 8, size = 2.5) +
-      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-lys_metaT
-
-
-muci_metaT <- ggplot(test[test$Group.1 != "Mucilaginibacter", ], aes(x = X1_av_T2_metaT, y = X3_av_T2_metaT)) +
-  geom_point(aes(color = Group.1), size = 3) +
-  scale_x_sqrt() +
-  scale_y_sqrt() +
-  scale_color_manual(values = vec_col4) +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-   theme(text = element_text(size = 9), legend.position = "none",   axis.title=element_text(size=11)) +
-    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
-  xlab("SynCom (RPKM)") +
-  ylab(expression(paste("", italic("- Mucilaginibacter"), " (RPKM)"))) +  
-  geom_point(aes(x = test[test$Group.1 == "Mucilaginibacter", ]$X1_av_T2_metaT, y = test[test$Group.1 == "Mucilaginibacter", ]$X3_av_T2_metaT), color = "darkorange2", fill = "darkorange2", shape = 8, size = 2.5)  +
-      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-muci_metaT
-```
-
-
-```{r, fig.width=3, fig.height = 2.5}
-bur_metaRS <- ggplot(test[test$Group.1 != "Burkholderia", ], aes(x = X1_av_T2_metaRS, y = X4_av_T2_metaRS)) +
-  geom_point(aes(color = Group.1), size = 3) +
-  scale_x_sqrt() +
-  scale_y_sqrt() +
-  scale_color_manual(values = vec_col5) +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-     theme(legend.position = "none", axis.title=element_text(size=11)) +
-    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
-  xlab("SynCom (RPKM)") +
-  ylab(expression(paste("", italic("- Burkholderia"), " (RPKM)"))) +  
-      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +
-  geom_point(aes(x = test[test$Group.1 == "Burkholderia", ]$X1_av_T2_metaRS, y = test[test$Group.1 == "Burkholderia", ]$X4_av_T2_metaRS), color = "dodgerblue", shape = 8, size = 2.5)
-
-bur_metaRS
-
-
-lys_metaRS <- ggplot(test[test$Group.1 != "Lysobacter", ], aes(x = X1_av_T2_metaRS, y = X2_av_T2_metaRS)) +
-  geom_point(aes(color = Group.1), size = 3) +
-  scale_x_sqrt() +
-  scale_y_sqrt() +
-  scale_color_manual(values = vec_col3) +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-   # stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
-  xlab("SynCom (RPKM)") +
-  ylab(expression(paste("", italic("- Lysobacter"), " (RPKM)"))) +  
-  geom_point(aes(x = test[test$Group.1 == "Lysobacter", ]$X1_av_T2_metaRS, y = test[test$Group.1 == "Lysobacter", ]$X2_av_T2_metaRS), color = "midnightblue", shape = 8, size = 2.5) +
-      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-lys_metaRS
-
-
-muci_metaRS <- ggplot(test[test$Group.1 != "Mucilaginibacter", ], aes(x = X1_av_T2_metaRS, y = X3_av_T2_metaRS)) +
-  geom_point(aes(color = Group.1), size = 3) +
-  scale_x_sqrt() +
-  scale_y_sqrt() +
-  scale_color_manual(values = vec_col4) +
-    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
-   theme(text = element_text(size = 9), legend.position = "none",   axis.title=element_text(size=11)) +
-    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
-  xlab("SynCom (RPKM)") +
-  ylab(expression(paste("", italic("- Mucilaginibacter"), " (RPKM)"))) +  
-  geom_point(aes(x = test[test$Group.1 == "Mucilaginibacter", ]$X1_av_T2_metaRS, y = test[test$Group.1 == "Mucilaginibacter", ]$X3_av_T2_metaRS), color = "darkorange2", fill = "darkorange2", shape = 8, size = 2.5)  +
-      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
-    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-muci_metaRS
-```
-### Supp Fig. S6
-
-```{r, eval = TRUE, fig.height = 7, fig.width=8}
-
-dropout_multiomics <- plot_grid(bur, bur_metaT, bur_metaRS, 
-                                muci, muci_metaT, muci_metaRS, 
-                                lys, lys_metaT, lys_metaRS,
-                         ncol = 3, 
-                         align = "hv")
-
-
-dropout_multiomics
-# setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/")
-# ggsave(file="dropout_multiomics.png", plot=dropout_multiomics, height = 7, width = 8, dpi = 600)
-
-```
-
 __To confirm findings from this experiment, we performed a second dropout experiment separately (see scripts 4.metaG_customindex_abundances_second_dropout_experiment_dataprep.Rmd and 5.metaG_customindex_abundances_second_dropout_experiment_dataprep.Rmd).__
 
-After running scripts 4. ad 5., one can run the following command to get Figure 2e:
+After running scripts 4. ad 5., one can run the following command:
 
 Import other experiment single dropouts
 
