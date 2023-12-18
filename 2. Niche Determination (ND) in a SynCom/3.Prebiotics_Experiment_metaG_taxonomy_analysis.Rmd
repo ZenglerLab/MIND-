@@ -1,0 +1,1022 @@
+---
+title: "SynCom Community Modifs Abundance Analysis"
+author: "Oriane Moyne"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(gplots)
+library(scales)
+library(ggpubr)
+library(cowplot)
+```
+
+## Data import 
+
+```{r}
+# Count tables with taxonomy annotations (Woltka gotu output)
+syncom <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/PREBIOTICS_EXP/Prebiotics_Syncom_metaG_RPKM.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "")
+syncom$genus_strain <- str_split(syncom$genus_strain, "_", simplify = TRUE)[,1]
+syncom$genus_strain[syncom$genus_strain == "Chitinophagaceae"] <- "Niastella"
+syncom <- syncom[!syncom$genus_strain%in%c("Bacillus", "Terrabacter"), ]
+```
+
+## Aggregate by strain
+
+```{r}
+syncom_agg <- syncom[, c(3:ncol(syncom))]
+syncom_agg <- aggregate(syncom_agg[, 2:ncol(syncom_agg)], by = list(syncom_agg$genus_strain), sum)
+``` 
+
+
+## Abundance plots
+
+Table formatting  
+
+```{r}
+data_plots <- reshape::melt(syncom_agg)
+colnames(data_plots) <- c("Taxon", "Sample", "count")
+
+data_plots$Sample <- str_replace(data_plots$Sample, "_0_", "_0.")
+
+data_plots$Substrate <- str_split(data_plots$Sample, "_", simplify = TRUE)[,1]
+data_plots$Concentration <- str_split(data_plots$Sample, "_", simplify = TRUE)[,2]
+data_plots$Replicate <- str_split(data_plots$Sample, "_", simplify = TRUE)[,3]
+```
+Create a vector of colors
+
+```{r}
+vec_col0 <- c("mediumpurple3", "deeppink",  "cyan3", "orange", "darkorange2", "darkgoldenrod1", "chartreuse3",
+              "deepskyblue4", "brown1", "orchid3",  "green3", 
+              "dodgerblue2",  "mediumvioletred",
+               "midnightblue", "seagreen4", "darkmagenta"
+              )
+```
+
+Create bacteria color key with bacteria ordered as in guild clustering
+
+```{r, fig.height=7, fig.width=2.5}
+syncom_agg$Group.1 <- ordered(syncom_agg$Group.1, levels = c("Mycobacterium", "Marmoricola", "Paenibacillus", "Chitinophaga", "Mucilaginibacter",  "Bosea",  "Methylobacterium",
+                                                      "Rhizobium", "Bradyrhizobium", "Rhodococcus", "Variovorax",
+                                                     "Burkholderia", "Niastella", 
+                                                    "Lysobacter", "Arthrobacter", "Brevibacillus"
+                                                ))
+
+ggplot(syncom_agg, aes(x = Ctrl_5_1, y = Ctrl_5_1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10() +
+  scale_y_log10() +
+  scale_color_manual(values = vec_col0) +
+    theme(legend.text = element_text(size=13), legend.key.size = unit(1.5,"line")) +
+guides(color = guide_legend(override.aes = list(size=5))) +
+  theme(legend.text = element_text(face = "italic"))
+```
+
+Average replicates by condition
+
+```{r}
+# Soil, nothing added (reference)
+
+syncom_agg$Ctrl123 <- apply(syncom_agg[, c("Ctrl_5_1", "Ctrl_5_2", "Ctrl_5_3")], 1, function(x)mean(x, na.rm = TRUE))
+
+#-------------
+
+# Fructose
+
+syncom_agg$Fructose_0.05 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Fructose_0.05_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Fructose_0.5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Fructose_0.5_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Fructose_5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Fructose_5_")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Galactose
+
+syncom_agg$Galactose_0.05 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Galactose_0.05_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Galactose_0.5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Galactose_0.5_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Galactose_5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Galactose_5_")], 1, function(x)mean(x, na.rm = TRUE))
+
+# maltose
+
+syncom_agg$Maltose_0.05 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Maltose_0.05_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Maltose_0.5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Maltose_0.5_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Maltose_5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Maltose_5_")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Ribose
+
+syncom_agg$Ribose_0.05 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Ribose_0.05_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Ribose_0.5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Ribose_0.5_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Ribose_5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Ribose_5_")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Trehalose
+
+syncom_agg$Trehalose_0.05 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Trehalose_0.05_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Trehalose_0.5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Trehalose_0.5_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Trehalose_5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Trehalose_5_")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Xylose
+
+syncom_agg$Xylose_0.05 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Xylose_0.05_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Xylose_0.5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Xylose_0.5_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Xylose_5 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Xylose_5_")], 1, function(x)mean(x, na.rm = TRUE))
+
+
+#------------
+
+# Cystine
+
+syncom_agg$Cystine_0.01 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Cystine_0.01_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Cystine_0.1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Cystine_0.1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Cystine_1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Cystine_1_")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Glutamate
+
+syncom_agg$Glutamate_0.1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Glutamate_0.1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Glutamate_1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Glutamate_1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Glutamate_10 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Glutamate_10_")], 1, function(x)mean(x, na.rm = TRUE))
+
+
+# Methionine
+
+syncom_agg$Methionine_0.01 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Methionine_0.01_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Methionine_0.1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Methionine_0.1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Methionine_1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Methionine_1_")], 1, function(x)mean(x, na.rm = TRUE))
+
+#------------
+
+# Putrescine
+
+syncom_agg$Putrescine_0.1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Putrescine_0.1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Putrescine_1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Putrescine_1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Putrescine_10 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Putrescine_10_")], 1, function(x)mean(x, na.rm = TRUE))
+
+
+# Spermidine
+
+syncom_agg$Spermidine_0.1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Spermidine_0.1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Spermidine_1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Spermidine_1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Spermidine_10 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Spermidine_10_")], 1, function(x)mean(x, na.rm = TRUE))
+
+#-------------
+
+# Sulfate/Thiosulfate
+
+syncom_agg$Thiosulfate_0.01 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Thiosulfate_0.01_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Thiosulfate_0.1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Thiosulfate_0.1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Thiosulfate_1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Thiosulfate_1_")], 1, function(x)mean(x, na.rm = TRUE))
+
+
+# Glutathione
+
+syncom_agg$Glutathione_0.1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Glutathione_0.1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Glutathione_1 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Glutathione_1_")], 1, function(x)mean(x, na.rm = TRUE))
+syncom_agg$Glutathione_10 <- apply(syncom_agg[, str_detect(colnames(syncom_agg), "Glutathione_10_")], 1, function(x)mean(x, na.rm = TRUE))
+
+
+syncom_agg$Group.1 <- ordered(syncom_agg$Group.1, levels = c("Mycobacterium", "Marmoricola", "Paenibacillus", "Chitinophaga", "Mucilaginibacter",  "Bosea",  "Methylobacterium",
+                        "Rhizobium", "Bradyrhizobium", "Rhodococcus", "Variovorax",
+                                                     "Burkholderia", "Niastella", 
+                                                    "Lysobacter", "Arthrobacter", "Brevibacillus"
+                                                ))
+
+
+vec_col1 <- c("mediumpurple3", "deeppink",  "cyan3", "orange", "darkorange2", "darkgoldenrod1", "chartreuse3",
+              "deepskyblue4", "brown1", "orchid3",  "green3", 
+              "dodgerblue2",  "mediumvioletred",
+               "midnightblue", "seagreen4", "darkmagenta"
+              )
+```
+
+
+
+# Linear regressions to compare relative abundances between prebiotic and control conditions
+
+Primary target: increase the targeted strain(s) through probiotics and/or prebiotics intervention  
+Secondary target: decrease competitors. 
+
+## SynCom vs SynCom + Substrate
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+fru005 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Fructose_0.05)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.05 g/L") 
+
+
+fru05 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Fructose_0.5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.5 g/L") 
+ 
+
+
+fru5 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Fructose_5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+      theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Fru 5 g/L") +
+  ggtitle("Fructose 5 g/L")
+
+fru005
+fru05
+fru5
+```
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+gal005 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Galactose_0.05)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.05 g/L") 
+
+
+gal05 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Galactose_0.5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.5 g/L") 
+ 
+
+
+gal5 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Galactose_5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+        theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Gal 5 g/L") +
+  ggtitle("Galactose 5 g/L")
+
+gal005
+gal05
+gal5
+```
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+mal005 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Maltose_0.05)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.05 g/L") 
+
+
+mal05 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Maltose_0.5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.5 g/L") 
+ 
+
+
+mal5 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Maltose_5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+        theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Mal + MD 5 g/L") +
+  ggtitle("Maltose + Maltodextrin 5 g/L")
+
+mal005
+mal05
+mal5
+```
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+rib005 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Ribose_0.05)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.05 g/L") 
+
+
+rib05 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Ribose_0.5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.5 g/L") 
+ 
+
+
+rib5 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Ribose_5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Rib 5 g/L") +
+  ggtitle("Ribose 5 g/L")
+
+rib005
+rib05
+rib5
+```
+
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+tre005 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Trehalose_0.05)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.05 g/L") 
+
+
+tre05 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Trehalose_0.5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.5 g/L") 
+ 
+
+
+tre5 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Trehalose_5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Tre 5 g/L") +
+  ggtitle("Trehalose 5 g/L")
+
+tre005
+tre05
+tre5
+```
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+xyl005 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Xylose_0.05)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.05 g/L") 
+
+
+xyl05 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Xylose_0.5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.5 g/L") 
+ 
+
+
+xyl5 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Xylose_5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position ="none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Xyl 5 g/L") +
+  ggtitle("Xylose 5 g/L")
+
+xyl005
+xyl05
+xyl5
+```
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+glu01 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Glutamate_0.1)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.1 mM") 
+
+
+glu1 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Glutamate_1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Glu 1 mM") +
+  ggtitle("Glutamate 1 mM")
+ 
+
+
+glu10 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Glutamate_10)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Glu 10 mM") +
+  ggtitle("Glutamate 10 mM")
+
+glu01
+glu1
+glu10
+```
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=2.8}
+put01 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Putrescine_0.1)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.1 mM") 
+
+
+put1 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Putrescine_1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("1 mM") 
+ 
+
+
+put10 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Putrescine_10)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Putrescine 10 mM") +
+  ggtitle("Putrescine 10 mM")
+
+put01
+put1
+put10
+```
+
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+spd01 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Spermidine_0.1)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.1 mM ") 
+
+
+spd1 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Spermidine_1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Spd 1 mM") +
+  ggtitle("Spermidine 1 mM")
+ 
+
+
+spd10 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Spermidine_10)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("Spd 10 mM") +
+  ggtitle("Spermidine 10 mM")
+
+spd01
+spd1
+spd10
+```
+
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+thio001 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Thiosulfate_0.01)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.01 mM ") 
+
+
+thio01 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Thiosulfate_0.1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("0.1 mM ") 
+ 
+
+
+thio1 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Thiosulfate_1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  theme(plot.title = element_text(size = 12, face = "bold")) +
+xlab("Control") +
+  ylab("S/T 1 mM") +
+  ggtitle("Sulfate + Thiosulfate 1 mM")
+
+thio001
+thio01
+thio1
+```
+
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
+glutathione01 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Glutathione_0.1)) + 
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("Glutathione 0.1 mM") 
+
+
+glutathione1 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Glutathione_1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("GSH 1 mM") +
+    theme(plot.title = element_text(size = 12)) +
+  ggtitle("Glutathione 1 mM")
+ 
+
+
+glutathione10 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Glutathione_10)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Control") +
+  ylab("Glutathione 10 mM") 
+
+glutathione01
+glutathione1
+glutathione10
+```
+## Best examples: 
+
+```{r, fig.height=1.5, fig.width=2.5}
+rib5 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Ribose_5)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=9)) +
+xlab("Control (RPKM)") +
+  ylab("Ribose 5 g/L (RPKM)") 
+rib5
+
+glutathione1 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Glutathione_1)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=9)) +
+xlab("Control (RPKM)") +
+  ylab("Glutathione 1 mM (RPKM)") 
+
+put10 <- ggplot(syncom_agg, aes(x = Ctrl123, y = Putrescine_10)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  #geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=9)) +
+xlab("Control (RPKM)") +
+  ylab("Putrescine 10 mM (RPKM)") 
+```
+
+
+```{r, eval = TRUE, fig.height = 7, fig.width=2.5}
+best <- plot_grid(rib5, 
+                  glutathione1, 
+                  put10,  
+                         labels=c("c", "d", "e"),
+                         ncol = 1, 
+                         align = "hv",
+                    byrow = TRUE, 
+                    greedy = FALSE, vjust = 1.2
+                    )
+best
+```
+
+Putrescine: are Burkholderia and Chitinophaga in or out of confidence interval?
+
+```{r}
+model <- lm(log10(syncom_agg$Putrescine_10) ~ log10(syncom_agg$Ctrl123))
+inorout <- data.frame(predict(model, type = "response", interval = "confidence", level = 0.99))
+rownames(inorout) <- syncom_agg$Group.1
+inorout$Put10 <- log10(syncom_agg$Putrescine_10)
+inorout$in_or_out <- ifelse(inorout$Put10<inorout$lwr, "decreased",   
+                            ifelse(inorout$Put10>inorout$upr, "increased", 
+                                   "unchanged"))
+inorout
+```
+
+-> Chitinophaga is increased (above 99% CI), Burkholderia is unchanged (inside 99% CI). 
+
+### Best concentrations plot:
+
+```{r, eval = TRUE, fig.height = 10, fig.width=8.5}
+best <- plot_grid(fru5,
+                    gal5,
+                    mal5,
+                    rib5, 
+                    tre5, 
+                    xyl5,
+                    put10, 
+                    spd1, 
+                    glu1,
+                    glutathione1,
+                    thio1,
+                    NULL, 
+                         labels=c("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"),
+                         ncol = 3, 
+                         align = "hv",
+                    #rel_heights = c(0.1, 1),
+                    byrow = TRUE, 
+                    greedy = TRUE#, vjust = 1.25
+                    )
+best
+```
+
+### Best examples boxplots
+
+Format table for boxplots
+
+```{r, fig.height=2, fig.width=2.5}
+for_boxplots <- reshape::melt(syncom_agg)
+
+colnames(for_boxplots) <- c("Tax", "Sample", "RPKM")
+for_boxplots <- for_boxplots[!str_detect(for_boxplots$Sample, "Ctrl_25"), ]
+for_boxplots$Sample <- str_replace(for_boxplots$Sample, "0_0", "0.0")
+for_boxplots$Sample <- str_replace(for_boxplots$Sample, "0_1_", "0.1_")
+for_boxplots$Sample <- str_replace(for_boxplots$Sample, "0_5", "0.5")
+
+for_boxplots$Compound <- str_split(for_boxplots$Sample, "_", simplify = TRUE)[, 1]
+for_boxplots$Concentration <- str_split(for_boxplots$Sample, "_", simplify = TRUE)[, 2]
+for_boxplots$Concentration <- ifelse(for_boxplots$Compound == "Ctrl", 0, for_boxplots$Concentration)
+for_boxplots$Replicate <- str_split(for_boxplots$Sample, "_", simplify = TRUE)[, 3]
+```
+Boxplots ribose
+
+```{r, fig.height=1.5, fig.width=2.5}
+ribbu <- ggplot(for_boxplots[for_boxplots$Compound %in% c("Ribose", "Ctrl") & for_boxplots$Tax == "Burkholderia", ], aes(x = Concentration, y = RPKM)) +
+  geom_boxplot(aes(color = Tax, fill = Tax, alpha = 0.5)) +
+  # scale_y_continuous(labels = function(x) {scales::scientific_format()(x)}) +
+  scale_y_continuous(breaks=c(100000, 200000, 300000), labels = expression("1.10"^5, "2.10"^5,  "3.10"^5)) +
+  scale_color_manual(values = "dodgerblue2") +
+  scale_fill_manual(values = "dodgerblue2") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=9), axis.title=element_text(size=10)) +
+theme(axis.title.x=element_blank()) +
+  ylab("Burkholderia")  +
+  theme(axis.title.y = element_text(face = "italic"))   
+
+ribpa <- ggplot(for_boxplots[for_boxplots$Compound %in% c("Ribose", "Ctrl") & for_boxplots$Tax == "Paenibacillus", ], aes(x = Concentration, y = RPKM)) +
+  geom_boxplot(aes(color = Tax, fill = Tax, alpha = 0.5)) +
+  # scale_y_continuous(labels = function(x) {scales::scientific_format()(x)}) +
+  scale_y_continuous(breaks=c(5000, 10000), labels = expression("5.10"^3, "1.10"^4)) +
+  scale_color_manual(values = "cyan3") +
+  scale_fill_manual(values = "cyan3") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=9), axis.title=element_text(size=10)) +
+xlab("Ribose (g/L)") +
+  ylab("Paenibacillus")  +
+  theme(axis.title.y = element_text(face = "italic"))
+```
+Boxplots glutathione
+
+```{r, fig.height=1.5, fig.width=2.5}
+gluchi <- ggplot(for_boxplots[for_boxplots$Compound %in% c("Glutathione", "Ctrl") & for_boxplots$Tax == "Chitinophaga", ], aes(x = Concentration, y = RPKM)) +
+  geom_boxplot(aes(color = Tax, fill = Tax, alpha = 0.5)) +
+  # scale_y_continuous(labels = function(x) {scales::scientific_format()(x)}) +
+  scale_y_continuous(breaks=c(100000,  200000), labels = expression( "1.10"^5, "2.10"^5)) +
+  scale_color_manual(values = "orange") +
+  scale_fill_manual(values = "orange") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=9), axis.title=element_text(size=10)) +
+xlab("Glutathione (mM)") +
+  ylab("Chitinophaga") +
+  theme(axis.title.y = element_text(face = "italic"))
+
+glubu <- ggplot(for_boxplots[for_boxplots$Compound %in% c("Glutathione", "Ctrl") & for_boxplots$Tax == "Burkholderia", ], aes(x = Concentration, y = RPKM)) +
+  geom_boxplot(aes(color = Tax, fill = Tax, alpha = 0.5)) +
+  # scale_y_continuous(labels = function(x) {scales::scientific_format()(x)}) +
+  scale_y_continuous(breaks=c(200000, 400000, 600000), labels = expression("2.10"^5, "4.10"^5, "6.10"^5)) +
+  scale_color_manual(values = "dodgerblue2") +
+  scale_fill_manual(values = "dodgerblue2") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=9), axis.title=element_text(size=10)) +
+theme(axis.title.x=element_blank()) +
+  ylab("Burkholderia") +
+  theme(axis.title.y = element_text(face = "italic"))
+
+glumu <- ggplot(for_boxplots[for_boxplots$Compound %in% c("Glutathione", "Ctrl") & for_boxplots$Tax == "Mucilaginibacter", ], aes(x = Concentration, y = RPKM)) +
+  geom_boxplot(aes(color = Tax, fill = Tax, alpha = 0.5)) +
+  scale_y_continuous(labels = function(x) {scales::scientific_format()(x)}) +
+ #scale_y_continuous(labels = function(x) { parse(text=gsub("e", ".10^", scales::scientific_format()(x))) }) +
+  scale_color_manual(values = "darkorange2") +
+  scale_fill_manual(values = "darkorange2") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Glutathione (mM)") +
+  ylab("Mucilaginibacter") +
+  theme(axis.title.y = element_text(face = "italic"))
+
+glubu
+gluchi
+glumu
+```
+Boxplots putrescine 
+
+```{r, fig.height=1.5, fig.width=2.5}
+purho <- ggplot(for_boxplots[for_boxplots$Compound %in% c("Putrescine", "Ctrl") & for_boxplots$Tax == "Rhodococcus", ], aes(x = Concentration, y = RPKM)) +
+  geom_boxplot(aes(color = Tax, fill = Tax, alpha = 0.5)) +
+  # scale_y_continuous(labels = function(x) {scales::scientific_format()(x)}) +
+  scale_y_continuous(breaks=c(1000, 2000, 3000), labels = expression("1.10"^3, "2.10"^3, "3.10"^3)) +
+  scale_color_manual(values = "orchid3") +
+  scale_fill_manual(values = "orchid3") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=9), axis.title=element_text(size=10)) +
+xlab("Putrescine (mM)") +
+  ylab("Rhodococcus") +
+  theme(axis.title.y = element_text(face = "italic"))
+
+pupa <- ggplot(for_boxplots[for_boxplots$Compound %in% c("Putrescine", "Ctrl") & for_boxplots$Tax == "Paenibacillus", ], aes(x = Concentration, y = RPKM)) +
+  geom_boxplot(aes(color = Tax, fill = Tax, alpha = 0.5)) +
+  # scale_y_continuous(labels = function(x) {scales::scientific_format()(x)}) +
+  scale_y_continuous(breaks=c(5000, 10000), labels = expression("5.10"^3, "1.10"^4)) +
+  scale_color_manual(values = "cyan3") +
+  scale_fill_manual(values = "cyan3") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=9), axis.title=element_text(size=10)) +
+theme(axis.title.x=element_blank()) +
+          ylab("Paenibacillus") +
+  theme(axis.title.y = element_text(face = "italic"))
+```
+
+Arrange Figure
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=2.2}
+best1 <- plot_grid(ribbu + theme(plot.margin = unit(c(0, 0, 0, 0.1), "cm")) , 
+                  ribpa + theme(plot.margin = unit(c(0, 0, 0, 0.1), "cm")), 
+                         ncol = 1, 
+                         align = "hv",
+                    byrow = TRUE, 
+                    greedy = FALSE, vjust = 1.2
+                    )
+best1
+
+ best2 <- plot_grid(glubu + theme(plot.margin = unit(c(0, 0, 0, 0.1), "cm")), 
+                  gluchi + theme(plot.margin = unit(c(0, 0, 0, 0.1), "cm")), 
+                         ncol = 1, 
+                         align = "hv",
+                    byrow = TRUE, 
+                    greedy = FALSE, vjust = 1.2
+                    )
+ best2
+
+ best3 <- plot_grid(pupa + theme(plot.margin = unit(c(0, 0, 0, 0.1), "cm")), 
+                  purho + theme(plot.margin = unit(c(0, 0, 0, 0.1), "cm")),
+                         ncol = 1, 
+                         align = "hv",
+                    byrow = TRUE, 
+                    greedy = FALSE, vjust = 1.2
+                    )
+ best3
+```
