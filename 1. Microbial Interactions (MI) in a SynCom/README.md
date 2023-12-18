@@ -12,7 +12,7 @@ It also contains results of experimental dropout experiments used to validate MI
 
 ### Experiment overview  
 
-Multi-omics analysis of a 16-member synthetic community (SynCom) grown in complex medium (see Moyne et _al._, 2023 manuscript for details).  
+Multi-omics analysis of a 16-member synthetic community (SynCom) grown in complex medium (see Moyne et _al._ manuscript for details).  
 
 Multi-omics analysis included:  
 - metagenomics (metaG)  
