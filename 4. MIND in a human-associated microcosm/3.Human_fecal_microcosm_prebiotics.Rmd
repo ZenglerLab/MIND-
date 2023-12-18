@@ -42,9 +42,7 @@ df <- df[, colnames(df) == "#OTU ID" | str_detect(colnames(df), "^MI04T1")]
 
 colnames(df) <- str_replace(colnames(df), "_metaG_WoL_index_subset_NEW", "")
 
-df <- df[, !str_detect(colnames(df), "spd") & !str_detect(colnames(df), "meth") | !str_detect(colnames(df), "glu") | !str_detect(colnames(df), "spd")]
-
-# df <
+#df <- df[, !str_detect(colnames(df), "spd") & !str_detect(colnames(df), "meth") | !str_detect(colnames(df), "glu") | !str_detect(colnames(df), "spd")]
 
 ```
 
