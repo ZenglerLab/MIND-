@@ -27,12 +27,12 @@ This repository contains data and code used to analyze data and produce figures 
 
 The repository is divided in subdirectories, which follow the overall outline of the paper. Namely:  
 
-__1. TE-based Functional Profiling and Prediction of Microbial Interactions (MI) in a SynCom__  
+__1. Microbial Interactions (MI) in a SynCom__  
 
 This section contains scripts and data used to determine __microbial functional profiles__ and __predict competition__ in a 16-member synthetic community (SynCom) based on translational efficiency (TE = metaRibo-Seq / metaRNA-Seq).  
 It also contains results of experimental dropout experiments used to validate MI-based predictions of competition interactions.  
 
-__2. Prediction of Substrate Preferences and Niche Determination (ND) in a SynCom__  
+__2. Niche Determination (ND) in a SynCom__  
 
 This section contains scripts and data used to perform __Niche Determination (ND)__ and __predict substrate preferences__ in a 16-member synthetic community (SynCom) based on TE.  
 It also contains results of experimental results of experimental prebiotic experiments used to validate niches-based predictions of substrate preferences.  
