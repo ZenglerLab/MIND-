@@ -1,0 +1,579 @@
+---
+title: "SynCom Community Modifs Abundance Analysis"
+author: "Oriane Moyne"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Samples description
+
+Multi-omics: metagenomics (metaG), metatranscriptomics (metaT), metaRibo-Seq (metaRS) analysis of 4-days (T1) and 7-days (T2) growth SynCom.  
+
+- X1 and X2 samples: Full SynCom (16 strains)  
+- X3: SynCom - _Lysobacter_ dropout
+- X4: SynCom - _Mucilaginibacter_ dropout
+- X5: SynCom - _Burkholderia_ dropout
+- X6: SynCom - _Burkholderia_, _Rhizobium_, _Rhodocccus_, _Brevibacillus_ dropout.
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(gplots)
+```
+
+## Data import 
+
+```{r}
+# Count tables with taxonomy annotations (Woltka gotu output)
+syncom <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/Syncom_formatted_filtered_corrected_RPKM.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "")
+syncom$genus_strain <- str_split(syncom$genus_strain, "_", simplify = TRUE)[,1]
+
+# syncom <- syncom[!syncom$genus_strain %in% c("Terrabacter", "Bacillus", "Marmoricola", "Mycobacterium"), ]
+syncom <- syncom[!syncom$genus_strain %in% c("Terrabacter", "Bacillus"), ] # I didn't add these strains in the SynCom
+
+```
+
+## Aggregate by strain
+
+```{r}
+syncom_agg <- syncom[, c(4:ncol(syncom))]
+syncom_agg <- aggregate(syncom_agg[, 2:ncol(syncom_agg)], by = list(syncom_agg$genus_strain), sum)
+
+# write.table(syncom_agg, "/home/moyne/Moyne_disk/Soil_project/Final_datasets/Syncom_dropouts_abundances.tsv", sep = "\t", col.names = TRUE, row.names = FALSE)
+```
+
+## Abundance plots
+
+```{r}
+data_plots <- reshape::melt(syncom_agg)
+colnames(data_plots) <- c("Taxon", "Sample", "count")
+
+data_plots$Community <- str_split(data_plots$Sample, "_", simplify = TRUE)[, 1]
+data_plots$Replicate <- str_split(data_plots$Sample, "_", simplify = TRUE)[, 2]
+data_plots$Time <- str_split(data_plots$Sample, "_", simplify = TRUE)[, 3]
+data_plots$Omic <- str_split(data_plots$Sample, "_", simplify = TRUE)[, 4]
+
+data_plots$Community <- gsub("X", "", data_plots$Community)
+
+data_plots$Community <- ordered(data_plots$Community, levels = seq(1:6))
+data_plots$Time <- ordered(data_plots$Time, levels = c("T1", "T2"))
+data_plots$Omic <- ordered(data_plots$Omic, levels = c("metaG", "metaT", "metaRS"))
+```
+
+Rename samples:  
+- X1: Full SynCom (16 strains) - was initially X1 + X2 because we did more replicates of this one.  
+- X2: SynCom - _Lysobacter_ dropout
+- X3: SynCom - _Mucilaginibacter_ dropout
+- X4: SynCom - _Burkholderia_ dropout
+- X5: SynCom - _Burkholderia_, _Rhizobium_, _Rhodocccus_, _Brevibacillus_ dropout.
+
+```{r, eval = TRUE}
+data_plots$Replicate <- ifelse(data_plots$Community == 2 & data_plots$Replicate == 1, 3, 
+                               ifelse(data_plots$Community == 2 & data_plots$Replicate == 2, 4,
+                                      data_plots$Replicate))
+data_plots$Replicate <- ordered(data_plots$Replicate, levels = c(1:4))
+data_plots$Community <- ifelse(data_plots$Community %in% c(1, 2), 1, as.numeric(as.character(data_plots$Community))-1)
+data_plots$Community <- ordered(data_plots$Community, levels = seq(1:5))
+```
+
+```{r, echo = FALSE}
+vec_col1 <- c("seagreen4", "gold", "brown1", "darkmagenta",
+              "dodgerblue2",  "orange",    "midnightblue", "deeppink",
+           "chartreuse3","darkorange2",  "mediumpurple3", 
+           "mediumvioletred","cyan3", "deepskyblue4", 
+           "orchid3",  "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", # "hotpink",
+           "grey", "black")
+```
+
+
+```{r, fig.height=7, fig.width=12}
+ggplot(data_plots, aes(fill=Taxon, y=count, x=Replicate)) + 
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col1) +
+    facet_wrap(Omic~Community~Time, ncol = 10, scales = "free_x") +
+   theme(text = element_text(size = 15)) +
+  labs(y = "Relative Abundance") 
+```
+
+Replicates looks good. Important differences between samples and time points.  
+
+## Community 1: Full community (Supp. Fig. S1 a)
+
+```{r, fig.height=6, fig.width=4}
+vec_col1 <- c("seagreen4", "gold", "brown1", "darkmagenta",
+              "dodgerblue2",  "orange",    "midnightblue",  "deeppink",
+           "chartreuse3","darkorange2",  "mediumpurple3", 
+           "mediumvioletred","cyan3", "deepskyblue4", 
+           "orchid3", "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen",  #"hotpink",
+           "grey", "black")
+```
+
+```{r, fig.width=7, fig.height=4}
+data_plots <- data_plots[data_plots$Sample != "X1_2_T2_metaG", ] # DNA extraction failed (tube broke)
+
+ggplot(data_plots[data_plots$Time == "T1"&data_plots$Community%in%c(1), ], aes(fill=Taxon, y=count, x=Replicate)) +
+     geom_bar(stat="identity", position = "fill") +
+     scale_fill_manual(values = vec_col1) +
+     theme(legend.text = element_text(face = "italic")) +
+     facet_wrap(.~Omic, ncol = 3, scales = "free_x") +
+    theme(text = element_text(size = 15)) +
+     theme(legend.title=element_blank()) +
+     labs(y = "Relative Abundance")
+
+ image <- ggplot(data_plots[data_plots$Time == "T2"&data_plots$Community%in%c(1), ], aes(fill=Taxon, y=count, x=Replicate)) +
+     geom_bar(stat="identity", position = "fill") +
+     scale_fill_manual(values = vec_col1) +
+     theme(legend.text = element_text(face = "italic")) +
+     facet_wrap(.~Omic, ncol = 3, scales = "free_x") +
+    theme(text = element_text(size = 15)) +
+     theme(legend.title=element_blank()) +
+     labs(y = "Relative Abundance")
+ 
+ image
+ 
+# setwd("/home/moyne/Desktop/")
+# ggsave(file="abdce_reproducibility.png", plot=image, height = 4, width = 7, dpi = 600)
+```
+Replicates are very similar. 
+
+### Abundance plot averages (Figure 2 b)
+
+```{r, fig.height=2.5, fig.width=3.5}
+image <-  ggplot(data_plots[data_plots$Time == "T1"&data_plots$Community%in%c(1), ], aes(fill=Taxon, y=count, x=Community)) +
+     geom_bar(stat="identity", position = "fill") +
+     scale_fill_manual(values = vec_col1) +
+     facet_wrap(.~Omic, ncol = 3) +
+     labs(x = "SynCom after 4 days of growth", y = "Relative Abundance") +
+        theme(text = element_text(size = 10), legend.position = "none",   axis.title=element_text(size=11), strip.text.x = element_text(size = 12)) 
+
+image
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/")
+# ggsave(file="Abundance_SynCom_omics_T1.png", plot=image, height = 2.5, width = 3, dpi = 600)
+
+
+image <- ggplot(data_plots[data_plots$Time == "T2"&data_plots$Community%in%c(1), ], aes(fill=Taxon, y=count, x=Community)) +
+     geom_bar(stat="identity", position = "fill") +
+     scale_fill_manual(values = vec_col1) +
+     facet_wrap(.~Omic, ncol = 3) +
+     labs(x = "SynCom after 7 days of growth", y = "Relative Abundance") +
+      theme(text = element_text(size = 12), legend.position = "none",   axis.title=element_text(size=12), strip.text.x = element_text(size = 12)) 
+
+image
+
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/")
+# ggsave(file="Abundance_SynCom_omics.png", plot=image, height = 2.5, width = 3, dpi = 600)
+```
+
+
+# Select Time 2: 7 days of growth  
+
+More diversity, slow grtowers had time to grow. 
+
+```{r}
+data_plots <- data_plots[data_plots$Time == "T2", ]
+```
+
+
+#--------------------------------
+
+# In silico vs. experimental community modifications
+
+In order NOT to be biased by relative abundance measure, we compare each of the experimentally tested conditions with what is expected (_in silico_ removal of the corresponding reads).  
+
+## Community 1 vs. 2: Lysobacter removal  
+
+On the left: what is expected (_in silico_ removal of _Lysobacter_ reads from community 1)  
+On the right: experimentally removed _Lysobacter_ from community before incubation.  
+
+```{r, fig.width = 2, fig.height = 6}
+vec_col3 <- c("seagreen4", "gold", "brown1", "darkmagenta",
+              "dodgerblue2",  "orange",    #"midnightblue",
+               "deeppink",
+           "chartreuse3","darkorange2",  "mediumpurple3", 
+           "mediumvioletred","cyan3", "deepskyblue4", 
+           "orchid3", "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", # "hotpink",
+           "grey", "black")
+
+ggplot(data_plots[data_plots$Community%in%c(1, 2)&data_plots$Taxon!="Lysobacter", ], aes(fill=Taxon, y=count, x=Community)) +
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col3) +
+    facet_wrap(.~Omic, nrow = 3) +
+   theme(text = element_text(size = 15), legend.position = "none") +
+      labs(y = "Relative Abundance")
+```
+
+Metagenomics abundance only:
+
+```{r, fig.width = 3, fig.height = 2.5}
+ggplot(data_plots[data_plots$Community%in%c(1, 2)&data_plots$Taxon!="Lysobacter"&data_plots$Omic == "metaG", ], aes(fill=Taxon, y=count, x=Community)) +
+    geom_bar(stat="identity", position = "fill", width = 0.50) +
+    scale_fill_manual(values = vec_col3) +
+    #facet_wrap(.~Community, nrow = 1, scales = "free_x") +
+   theme(text = element_text(size = 10), legend.position = "none",   axis.title=element_text(size=11)) +
+      labs(y = "Relative Abundance") 
+```
+
+Looks like we have more _Brevibacillus_ than expected. Check linear regression analysis below.
+
+
+## Community 1 vs. 4: Mucilaginibacter removal
+
+```{r, fig.height=6, fig.width=2}
+vec_col4 <- c("seagreen4", "gold", "brown1", "darkmagenta",
+              "dodgerblue2",  "orange",    "midnightblue",  "deeppink",
+           "chartreuse3", #"darkorange2", 
+            "mediumpurple3", 
+           "mediumvioletred","cyan3", "deepskyblue4", 
+           "orchid3", "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", # "hotpink",
+           "grey", "black")
+
+ggplot(data_plots[data_plots$Community%in%c(1, 3)&data_plots$Taxon!="Mucilaginibacter", ], aes(fill=Taxon, y=count, x=Community)) + 
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col4) +
+    facet_wrap(.~Omic, nrow = 3) +
+   theme(text = element_text(size = 15), legend.position = "none") +      
+  labs(y = "Relative Abundance")
+```
+Metagenomics abundance only: 
+
+```{r, fig.width = 3, fig.height = 2.5}
+ggplot(data_plots[data_plots$Community%in%c(1, 3)&data_plots$Taxon!="Mucilaginibacter"&data_plots$Omic == "metaG", ], aes(fill=Taxon, y=count, x=Community)) +
+    geom_bar(stat="identity", position = "fill", width = 0.50) +
+    scale_fill_manual(values = vec_col4) +
+    #facet_wrap(.~Community, nrow = 1, scales = "free_x") +
+   theme(text = element_text(size = 10), legend.position = "none",   axis.title=element_text(size=11)) +
+      labs(y = "Relative Abundance") 
+```
+
+Looks like we have more _Chitinophaga_ and _Burkholderia_ than expected. Check linear regression analysis below.
+
+## Community 1 vs. 5: Burkholderia removal
+
+```{r, fig.height=6, fig.width=2}
+vec_col5 <- c("seagreen4", "gold", "brown1", "darkmagenta",
+              #"dodgerblue2",  
+              "orange",    "midnightblue",  "deeppink",
+           "chartreuse3","darkorange2",  "mediumpurple3", 
+           "mediumvioletred","cyan3", "deepskyblue4", 
+           "orchid3", "green3", "paleturquoise4", "darkgoldenrod", 
+           "darkslateblue", "darkseagreen", # "hotpink",
+           "grey", "black")
+
+ggplot(data_plots[data_plots$Community%in%c(1, 4)&data_plots$Taxon!="Burkholderia", ], aes(fill=Taxon, y=count, x=Community)) + 
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col5) +
+    facet_wrap(.~Omic, nrow = 3) +
+   theme(text = element_text(size = 15), legend.position = "none") +
+    labs(y = "Relative Abundance")
+```
+Metagenomics abundance only: 
+
+```{r, fig.width = 3, fig.height = 2.5}
+ggplot(data_plots[data_plots$Community%in%c(1, 4)&data_plots$Taxon!="Burkholderia"&data_plots$Omic == "metaG", ], aes(fill=Taxon, y=count, x=Community)) +
+    geom_bar(stat="identity", position = "fill", width = 0.50) +
+    scale_fill_manual(values = vec_col5) +
+    #facet_wrap(.~Community, nrow = 1, scales = "free_x") +
+   theme(text = element_text(size = 10), legend.position = "none",   axis.title=element_text(size=11)) +
+      labs(y = "Relative Abundance") 
+```
+
+Looks like we have more _Rhizobium_ than expected. Check linear regression analysis below.
+
+# Linear regression plots
+
+```{r}
+test <- aggregate(syncom[, str_detect(colnames(syncom), "meta")], by = list(syncom$genus_strain), sum)
+
+# Calculate average of replicates for each condition
+test$X1_av_T2_metaG <- apply(test[, str_detect(colnames(test), "X1")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaG")|str_detect(colnames(test), "X2")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaG")], 1, function(x)mean(x, na.rm = TRUE))
+test$X2_av_T2_metaG <- apply(test[, str_detect(colnames(test), "X3")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaG")], 1, function(x)mean(x, na.rm = TRUE))
+test$X3_av_T2_metaG <- apply(test[, str_detect(colnames(test), "X4")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaG")], 1, function(x)mean(x, na.rm = TRUE))
+test$X4_av_T2_metaG <- apply(test[, str_detect(colnames(test), "X5")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaG")], 1, function(x)mean(x, na.rm = TRUE))
+test$X5_av_T2_metaG <- apply(test[, str_detect(colnames(test), "X6")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaG")], 1, function(x)mean(x, na.rm = TRUE))
+
+test$X1_av_T2_metaT <- apply(test[, str_detect(colnames(test), "X1")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaT")|str_detect(colnames(test), "X2")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaT")], 1, function(x)mean(x, na.rm = TRUE))
+test$X2_av_T2_metaT <- apply(test[, str_detect(colnames(test), "X3")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaT")], 1, function(x)mean(x, na.rm = TRUE))
+test$X3_av_T2_metaT <- apply(test[, str_detect(colnames(test), "X4")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaT")], 1, function(x)mean(x, na.rm = TRUE))
+test$X4_av_T2_metaT <- apply(test[, str_detect(colnames(test), "X5")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaT")], 1, function(x)mean(x, na.rm = TRUE))
+test$X5_av_T2_metaT <- apply(test[, str_detect(colnames(test), "X6")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaT")], 1, function(x)mean(x, na.rm = TRUE))
+
+test$X1_av_T2_metaRS <- apply(test[, str_detect(colnames(test), "X1")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaRS")|str_detect(colnames(test), "X2")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaRS")], 1, function(x)mean(x, na.rm = TRUE))
+test$X2_av_T2_metaRS <- apply(test[, str_detect(colnames(test), "X3")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaRS")], 1, function(x)mean(x, na.rm = TRUE))
+test$X3_av_T2_metaRS <- apply(test[, str_detect(colnames(test), "X4")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaRS")], 1, function(x)mean(x, na.rm = TRUE))
+test$X4_av_T2_metaRS <- apply(test[, str_detect(colnames(test), "X5")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaRS")], 1, function(x)mean(x, na.rm = TRUE))
+test$X5_av_T2_metaRS <- apply(test[, str_detect(colnames(test), "X6")&str_detect(colnames(test), "T2")&str_detect(colnames(test), "metaRS")], 1, function(x)mean(x, na.rm = TRUE))
+```
+
+```{r, fig.width=4, fig.height = 3, eval = TRUE}
+test <- test[!test$Group.1 %in% c("Terrabacter", "Bacillus"), ] # Negative controls: included in genomes index but NOT added into the SynCom
+```
+
+
+# Linear regression plots
+
+What is expected if no competition (in silico removal of _Burkholderia_ reads): Relative abundance of all the other SynCom members would increase in a similar way, so they will be exactly on the regression line. 
+
+```{r, fig.width=3, fig.height = 2.5}
+# In silico would be:
+ggplot(test[test$Group.1 != "Burkholderia", ], aes(x = X1_av_T2_metaG, y = X1_av_T2_metaG)) +
+  geom_point(aes(color = Group.1), size = 2.5) +
+  scale_x_sqrt() +
+  scale_y_sqrt(limits = c(-500, 600000)) +
+  scale_color_manual(values = vec_col5) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+     theme(legend.position = "none", axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab("SynCom - Burkholderia (RPKM)") +  
+  geom_point(aes(x = test[test$Group.1 == "Burkholderia", ]$X1_av_T2_metaG, y = test[test$Group.1 == "Burkholderia", ]$X4_av_T2_metaG), color = "dodgerblue", shape = 25, size = 2.5) 
+```
+
+But what happens experimentally:
+
+
+```{r, fig.width=3, fig.height = 2.5}
+library(scales)
+
+bur <- ggplot(test[test$Group.1 != "Burkholderia", ], aes(x = X1_av_T2_metaG, y = X4_av_T2_metaG)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col5) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+     theme(legend.position = "none", axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Burkholderia")))) +  
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +
+  geom_point(aes(x = test[test$Group.1 == "Burkholderia", ]$X1_av_T2_metaG, y = test[test$Group.1 == "Burkholderia", ]$X4_av_T2_metaG), color = "dodgerblue", shape = 25, size = 2.5) 
+
+bur
+```
+
+_Rhizobium_ increases significantly as compared to the rest of the community. It is outside of the 99% confidence interval. It is in the same guild than _Burkholderia_: competition. 
+
+Similar results for all other examples:  
+
+
+```{r, fig.width=3, fig.height = 2.5}
+bur <- ggplot(test[test$Group.1 != "Burkholderia", ], aes(x = X1_av_T2_metaG, y = X4_av_T2_metaG)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col5) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+     theme(legend.position = "none", axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Burkholderia"), " (RPKM)"))) +  
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +
+  geom_point(aes(x = test[test$Group.1 == "Burkholderia", ]$X1_av_T2_metaG, y = test[test$Group.1 == "Burkholderia", ]$X4_av_T2_metaG), color = "dodgerblue", shape = 8, size = 2.5)
+
+bur
+
+
+lys <- ggplot(test[test$Group.1 != "Lysobacter", ], aes(x = X1_av_T2_metaG, y = X2_av_T2_metaG)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col3) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+   # stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Lysobacter"), " (RPKM)"))) +  
+  geom_point(aes(x = test[test$Group.1 == "Lysobacter", ]$X1_av_T2_metaG, y = test[test$Group.1 == "Lysobacter", ]$X2_av_T2_metaG), color = "midnightblue", shape = 8, size = 2.5) +
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+lys
+
+
+muci <- ggplot(test[test$Group.1 != "Mucilaginibacter", ], aes(x = X1_av_T2_metaG, y = X3_av_T2_metaG)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col4) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+   theme(text = element_text(size = 9), legend.position = "none",   axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Mucilaginibacter"), " (RPKM)"))) +  
+  geom_point(aes(x = test[test$Group.1 == "Mucilaginibacter", ]$X1_av_T2_metaG, y = test[test$Group.1 == "Mucilaginibacter", ]$X3_av_T2_metaG), color = "darkorange2", fill = "darkorange2", shape = 8, size = 2.5)  +
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+muci
+```
+
+
+## Other -omics
+
+Is overall transcriptional and translational activity of competitors increased as well as metagenomics abundance?
+
+### Subset of figure 2 e
+
+```{r, fig.width=3, fig.height = 2.5}
+bur_metaT <- ggplot(test[test$Group.1 != "Burkholderia", ], aes(x = X1_av_T2_metaT, y = X4_av_T2_metaT)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col5) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+     theme(legend.position = "none", axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Burkholderia"), " (RPKM)"))) +  
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +
+  geom_point(aes(x = test[test$Group.1 == "Burkholderia", ]$X1_av_T2_metaT, y = test[test$Group.1 == "Burkholderia", ]$X4_av_T2_metaT), color = "dodgerblue", shape = 8, size = 2.5)
+
+bur_metaT
+
+
+lys_metaT <- ggplot(test[test$Group.1 != "Lysobacter", ], aes(x = X1_av_T2_metaT, y = X2_av_T2_metaT)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col3) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+   # stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Lysobacter"), " (RPKM)"))) +  
+  geom_point(aes(x = test[test$Group.1 == "Lysobacter", ]$X1_av_T2_metaT, y = test[test$Group.1 == "Lysobacter", ]$X2_av_T2_metaT), color = "midnightblue", shape = 8, size = 2.5) +
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+lys_metaT
+
+
+muci_metaT <- ggplot(test[test$Group.1 != "Mucilaginibacter", ], aes(x = X1_av_T2_metaT, y = X3_av_T2_metaT)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col4) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+   theme(text = element_text(size = 9), legend.position = "none",   axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Mucilaginibacter"), " (RPKM)"))) +  
+  geom_point(aes(x = test[test$Group.1 == "Mucilaginibacter", ]$X1_av_T2_metaT, y = test[test$Group.1 == "Mucilaginibacter", ]$X3_av_T2_metaT), color = "darkorange2", fill = "darkorange2", shape = 8, size = 2.5)  +
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+muci_metaT
+```
+
+
+```{r, fig.width=3, fig.height = 2.5}
+bur_metaRS <- ggplot(test[test$Group.1 != "Burkholderia", ], aes(x = X1_av_T2_metaRS, y = X4_av_T2_metaRS)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col5) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+     theme(legend.position = "none", axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Burkholderia"), " (RPKM)"))) +  
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +
+  geom_point(aes(x = test[test$Group.1 == "Burkholderia", ]$X1_av_T2_metaRS, y = test[test$Group.1 == "Burkholderia", ]$X4_av_T2_metaRS), color = "dodgerblue", shape = 8, size = 2.5)
+
+bur_metaRS
+
+
+lys_metaRS <- ggplot(test[test$Group.1 != "Lysobacter", ], aes(x = X1_av_T2_metaRS, y = X2_av_T2_metaRS)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col3) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+   # stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Lysobacter"), " (RPKM)"))) +  
+  geom_point(aes(x = test[test$Group.1 == "Lysobacter", ]$X1_av_T2_metaRS, y = test[test$Group.1 == "Lysobacter", ]$X2_av_T2_metaRS), color = "midnightblue", shape = 8, size = 2.5) +
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+lys_metaRS
+
+
+muci_metaRS <- ggplot(test[test$Group.1 != "Mucilaginibacter", ], aes(x = X1_av_T2_metaRS, y = X3_av_T2_metaRS)) +
+  geom_point(aes(color = Group.1), size = 3) +
+  scale_x_sqrt() +
+  scale_y_sqrt() +
+  scale_color_manual(values = vec_col4) +
+    geom_smooth(method='lm', alpha = 0.5, level = 0.99) +
+   theme(text = element_text(size = 9), legend.position = "none",   axis.title=element_text(size=11)) +
+    #stat_regline_equation(label.y = 700, aes(label = ..rr.label..)) +
+  xlab("SynCom (RPKM)") +
+  ylab(expression(paste("", italic("- Mucilaginibacter"), " (RPKM)"))) +  
+  geom_point(aes(x = test[test$Group.1 == "Mucilaginibacter", ]$X1_av_T2_metaRS, y = test[test$Group.1 == "Mucilaginibacter", ]$X3_av_T2_metaRS), color = "darkorange2", fill = "darkorange2", shape = 8, size = 2.5)  +
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+muci_metaRS
+```
+### Supp Fig. S6
+
+```{r, eval = TRUE, fig.height = 7, fig.width=8}
+
+dropout_multiomics <- plot_grid(bur, bur_metaT, bur_metaRS, 
+                                muci, muci_metaT, muci_metaRS, 
+                                lys, lys_metaT, lys_metaRS,
+                         ncol = 3, 
+                         align = "hv")
+
+
+dropout_multiomics
+# setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/")
+# ggsave(file="dropout_multiomics.png", plot=dropout_multiomics, height = 7, width = 8, dpi = 600)
+
+```
+
+__To confirm findings from this experiment, we performed a second dropout experiment separately (see scripts 4.metaG_customindex_abundances_second_dropout_experiment_dataprep.Rmd and 5.metaG_customindex_abundances_second_dropout_experiment_dataprep.Rmd).__
+
+After running scripts 4. ad 5., one can run the following command to get Figure 2e:
+
+Import other experiment single dropouts
+
+```{r, eval = TRUE, fig.height = 6, fig.width=4.5}
+
+dropout_all <- plot_grid(bur, bur, art, bra, lys, muci,
+                         ncol = 2, 
+                         align = "hv")
+
+dropout_all <- plot_grid(art, art, lys, bur, bra, muci,
+                         ncol = 2, 
+                         align = "hv")
+
+dropout_all
+# setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/")
+# ggsave(file="dropout2_all_expt_stars.png", plot=dropout_all, height = 6, width = 4.5, dpi = 600)
+```
