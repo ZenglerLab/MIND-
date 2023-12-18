@@ -42,6 +42,11 @@ __3. MIND in a soil microcosm__
 This section contains scripts and data used to perform __MIND predictions__ based on TE in a soil microcosm grown in complex medium.  
 It also contains results of prebiotic and probiotic experiments used to validate MIND predictions of substrate preferences and competition.  
 
+__4. MIND in a human-associated microcosm__
+
+This section contains scripts and data used to perform __MIND predictions__ based on TE in a human-associated gut microbiome grown in complex medium.  
+It also contains results of prebiotic experiments used to validate MIND predictions of substrate preferences and competition.  
+
 ## Versions  
 
 These analyses were performed under Linux, Ubuntu 18.04.6 LTS using R version 3.6.3 and Rstudio version 1.4.1717. 
