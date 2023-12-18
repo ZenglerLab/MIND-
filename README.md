@@ -15,7 +15,7 @@
 
 In this study, we present a new approach that integrates transcription and translation measurements to __predict competition and substrate preferences__ within microbial communities, consequently __enabling selective manipulation of the microbiome__.  
 
-By performing metatranscriptomic (metaRNA-Seq) and metatranslatomic (metaRibo-Seq) analysis in complex samples, we characterized microbes into __functional profiles__ and demonstrated that __members of with similar functional profiles are competitors__.  
+By performing metagenomics (metaDNA-Seq), metatranscriptomic (metaRNA-Seq) and metatranslatomic (metaRibo-Seq) analysis in complex samples, we characterized microbes into __functional profiles__ and demonstrated that __members of with similar functional profiles are competitors__.  
 
 Then, we predicted __preferred substrates__ based on metaRNA-Seq and metaRibo-Seq signal on importer proteins, which specifically benefited selected microbes in the community (i.e. their __niche__) and simultaneously impaired their competitors. 
 
