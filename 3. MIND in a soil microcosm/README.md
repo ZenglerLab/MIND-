@@ -49,7 +49,7 @@ __Input File(s):__
 - Output from previous script: ```1.multiomics_customindex_dataprep.Rmd```
 
 __Overview:__  
-Comparison of microbes functional profiles allowed to calculate a __competition score__ and __predict competition__ between SynCom members hwne grown in a soil microcosm.  
+Comparison of microbes functional profiles allowed to calculate a __competition score__ and __predict competition__ between SynCom members when grown in a soil microcosm.  
 
 This script produces manuscript Figure 5b and Suppl. Figure S5a. 
 
