@@ -135,7 +135,7 @@ test3$X5_av <- apply(test3[, str_detect(colnames(test3), "X5")], 1, function(x)m
 ```
 
 
-## Bradyrhizobium dropout (Fig. 2e)
+## Bradyrhizobium dropout
 
 ```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
 vec_col <- c("seagreen4", "gold", #"brown1", 
@@ -164,7 +164,7 @@ theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   them
 bra
 ```
 
-## Arthrobacter dropout (Fig. 2e)
+## Arthrobacter dropout
 
 ```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
 vec_col <- c(#"seagreen4", 
@@ -195,7 +195,7 @@ theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   them
 art
 ```
 
-## Mucilaginibacter AND Chitinophaga dropout (Supp. Fig. S7 h)
+## Mucilaginibacter AND Chitinophaga dropout
 
 ```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
 vec_col <- c("seagreen4", 
@@ -229,7 +229,7 @@ theme(axis.text=element_text(size=8), axis.title=element_text(size=11)) +   them
 chimu
 ```
 
-## Burkholderia AND Rhizobium dropout (Supp. Fig. S7 d)
+## Burkholderia AND Rhizobium dropout
 
 
 ```{r, eval = TRUE, fig.height = 2.5, fig.width=3}
