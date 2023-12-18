@@ -1,0 +1,2017 @@
+---
+title: "Untitled"
+author: "Oriane Moyne"
+date: "10/3/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Load libraries
+
+```{r, message = FALSE}
+# Packages I commonly use
+library(stringr)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(reshape)
+library(reshape2)
+library(gplots)
+library(scales)
+library(ggpubr)
+library(cowplot)
+```
+
+## Data import 
+
+```{r}
+# Count tables with taxonomy annotations (Woltka gotu output)
+wol <- read.table("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Expt_1/WoL_subset/Soil_pre_pro_biotics_wolsubset_ogu.tsv", 
+                    sep="\t", 
+                    dec=".", 
+                    header = TRUE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "")
+
+colnames(wol) <- str_replace(colnames(wol), "_WoL_subset", "")
+
+lineages <- read.table("/home/moyne/Desktop/Woltka_DB_20170307/taxonomy/lineage.txt", 
+                    sep=c("\t"), 
+                    dec=".", 
+                    header = FALSE, 
+                    stringsAsFactors = FALSE, 
+                    na.strings = NA, 
+                    check.names = FALSE, 
+                    comment.char = "", 
+                    quote = "")
+
+lineages <- lineages[lineages$V1 %in% wol$OTU_ID, ]
+lineages$genus <- str_replace(str_split(lineages$V2, ";", simplify = TRUE)[,6], "g__", "")
+lineages$species <- str_replace(str_split(lineages$V2, ";", simplify = TRUE)[,7], "s__", "")
+
+wol <- merge(lineages, wol, by.x = "V1", by.y = "OTU_ID")
+
+length(unique(wol$species))
+length(unique(wol$genus))
+wol[duplicated(wol$species),]
+```
+
+
+## Aggregate by genus
+
+
+```{r}
+wol_agg <- wol[, c(3, 5:ncol(wol))]
+ wol_agg <- aggregate(wol_agg[, 2:ncol(wol_agg)], by = list(str_split(wol_agg$genus, " ", simplify = TRUE)[,1]), sum)
+ colnames(wol_agg)[1] <- "species"
+``` 
+
+## CPM normalization
+
+```{r}
+apply(wol_agg[,2:ncol(wol_agg)], 2, sum)
+
+wol_agg[,2:ncol(wol_agg)] <- apply(wol_agg[,2:ncol(wol_agg)], 2, function(x) x/sum(x) * 1000000)
+```
+
+## x vs. y plots
+
+### Calculate averages each condition
+
+
+```{r}
+# Soil, nothing added (reference)
+
+wol_agg$Soil_Ctrl123 <- apply(wol_agg[, c("Soil_1_S65", "Soil_2_S66", "Soil_3_S67")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Soil, different conditions
+
+wol_agg$Soil_LB_av <- apply(wol_agg[, c("Soil_LB_1_S74", "Soil_LB_2_S75", "Soil_LB_3_S76")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Soil_exu_av <- apply(wol_agg[, c("Soil_Exudate_1_S68", "Soil_Exudate_2_S69", "Soil_Exudate_3_S70")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Soil_water_av <- apply(wol_agg[, c("Soil_Water_1_S80", "Soil_Water_2_S81", "Soil_Water_3_S82")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Soil_SynCom_LB_av <- apply(wol_agg[, c("Soil_SynCom_LB_1_S77", "Soil_SynCom_LB_2_S78", "Soil_SynCom_LB_3_S79")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Soil_wol_exu_av <- apply(wol_agg[, c("Soil_SynCom_Exudate_1_S71", "Soil_SynCom_Exudate_2_S72", "Soil_SynCom_Exudate_3_S73")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Soil + Strain, +/- Substrates Additions
+
+wol_agg$Bre_av <- apply(wol_agg[, c("Bre_1_S21", "Bre_2_S22")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Bur_av <- apply(wol_agg[, c("Bur_1_S31", "Bur_2_S32")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Bur_Fru_av <- apply(wol_agg[, c("Bur_Fru_1_S9", "Bur_Fru_2_S10")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Bur_Rib_av <- apply(wol_agg[, c("Bur_Rib_1_S11", "Bur_Rib_2_S12")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Bur_Tre_av <- apply(wol_agg[, c("Bur_Tre_1_S5", "Bur_Tre_2_S6")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Chi_av <- apply(wol_agg[, c("Chi_1_S27", "Chi_2_S28")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Chi_Glu_av <- apply(wol_agg[, c("Chi_Glu_1_S17", "Chi_Glu_2_S18")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Chi_Thio_av <- apply(wol_agg[, c("Chi_Thio_1_S33", "Chi_Thio_2_S34")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Lys_av <- apply(wol_agg[, c("Lys_1_S23", "Lys_2_S24")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Pae_av <- apply(wol_agg[, c("Pae_1_S29", "Pae_2_S30")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Pae_Put_av <- apply(wol_agg[, c("Pae_Put_1_S1", "Pae_Put_2_S2")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Pae_Rib_av <- apply(wol_agg[, c("Pae_Rib_1_S13", "Pae_Rib_2_S14")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Pae_Tre_av <- apply(wol_agg[, c("Pae_Tre_1_S7", "Pae_Tre_2_S8")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Rhi_av <- apply(wol_agg[, c("Rhi_1_S25", "Rhi_2_S26")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Rhi_Glu_av <- apply(wol_agg[, c("Rhi_Glu_1_S15", "Rhi_Glu_2_S16")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Rho_av <- apply(wol_agg[, c("Rho_1_S19", "Rho_2_S20")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$Rho_Put_av <- apply(wol_agg[, c("Rho_Put_1_S3", "Rho_Put_2_S4")], 1, function(x)mean(x, na.rm = TRUE))
+
+# Substrates Additions (in Soil and in Soil + SynCom)
+
+wol_agg$SynCom_av <- apply(wol_agg[, c("Soil_SynCom_1_S49", "Soil_SynCom_2_S50")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Put_av <- apply(wol_agg[, c("Putr_1_S41", "Putr_2_S42")], 1, function(x)mean(x, na.rm = TRUE))
+wol_agg$SynCom_Put_av <- apply(wol_agg[, c("Put_SynCom_1_S57", "Put_SynCom_2_S58")], 1, function(x)mean(x, na.rm = TRUE))
+
+wol_agg$Fru_av <- apply(wol_agg[, c("Fru_1_S47", "Fru_2_S48")], 1, function(x) mean(x, na.rm = TRUE))
+wol_agg$SynCom_Fru_av <- apply(wol_agg[, c("Fru_SynCom_1_S59", "Fru_SynCom_2_S60")], 1, function(x) mean(x, na.rm = TRUE))
+
+wol_agg$Glu_av <- apply(wol_agg[, c("Glu_1_S45", "Glu_2_S46")], 1, function(x) mean(x, na.rm = TRUE))
+wol_agg$SynCom_Glu_av <- apply(wol_agg[, c("Glu_SynCom_1_S55", "Glu_SynCom_2_S56")], 1, function(x) mean(x, na.rm = TRUE))
+
+wol_agg$Mal_av <- apply(wol_agg[, c("Mal_1_S37", "Mal_2_S38")], 1, function(x) mean(x, na.rm = TRUE))
+wol_agg$SynCom_Mal_av <- apply(wol_agg[, c("Mal_SynCom_1_S53", "Mal_SynCom_2_S54")], 1, function(x) mean(x, na.rm = TRUE))
+
+wol_agg$Rib_av <- apply(wol_agg[, c("Rib_1_S35", "Rib_2_S36")], 1, function(x) mean(x, na.rm = TRUE))
+wol_agg$SynCom_Rib_av <- apply(wol_agg[, c("Rib_SynCom_1_S61", "Rib_SynCom_2_S62")], 1, function(x) mean(x, na.rm = TRUE))
+
+wol_agg$ST_av <- apply(wol_agg[, c("ST_1_S39", "ST_2_S40")], 1, function(x) mean(x, na.rm = TRUE))
+wol_agg$SynCom_ST_av <- apply(wol_agg[, c("ST_SynCom_1_S51", "ST_SynCom_2_S52")], 1, function(x) mean(x, na.rm = TRUE))
+
+wol_agg$Tre_av <- apply(wol_agg[, c("Tre_1_S43", "Tre_2_S44")], 1, function(x) mean(x, na.rm = TRUE))
+wol_agg$SynCom_Tre_av <- apply(wol_agg[, c("Tre_SynCom_1_S63", "Tre_SynCom_2_S64")], 1, function(x) mean(x, na.rm = TRUE))
+```
+
+## Prep data for plotting
+
+
+```{r, eval = TRUE}
+wol_agg$species <- str_replace(wol_agg$species, "\\[", "X.")
+wol_agg$species <- str_replace(wol_agg$species, "\\]", ".")
+wol_agg <- wol_agg[order(wol_agg$species), ]
+
+wol_agg$top <- ifelse(str_split(wol_agg$species, "\\ ", simplify = TRUE)[,1] %in% c("Mucilaginibacter", "Niastella","Chitinophaga", 
+                      "Brevibacillus", "Lysobacter", 
+                      "Burkholderia", "Bradyrhizobium", "Paenibacillus", "Rhizobium", 
+                       "Marmoricola", "Mycobacterium",  "Bosea",  "Methylobacterium",
+                      "Arthrobacter", "Rhodococcus", "Variovorax"), 
+                  as.character(wol_agg$species), "other")
+
+unique(wol_agg$top)
+
+wol_agg$top <- as.character(wol_agg$top)
+wol_agg$top <- ordered(wol_agg$top, levels = c(wol_agg$top[wol_agg$top!="other"] , "other"))
+
+```
+
+
+
+## Create vectors of color
+
+```{r}
+# if 0.01 coverage
+vec_col1 <- c("seagreen4",   "gold", "brown1", "darkmagenta",
+              "dodgerblue2", "orange", 
+               "midnightblue","deeppink", "chartreuse3",  "darkorange2",  "mediumpurple3", "mediumvioletred", 
+               "cyan3",    "deepskyblue4", "orchid3", "green3", 
+           "grey")
+
+# # # # if 0.1 coverage
+# vec_col1 <- c("seagreen4",   "gold", "brown1",
+#               "dodgerblue2", "orange",
+#                "midnightblue", "chartreuse3",  "darkorange2",  "mediumpurple3",   "deepskyblue4", "orchid3", "green3",
+#            "grey")
+```
+
+Option 2: color top abundance
+
+```{r, eval = FALSE}
+wol_agg$species <- str_replace(wol_agg$species, "\\[", "X.")
+wol_agg$species <- str_replace(wol_agg$species, "\\]", ".")
+wol_agg$average <- apply(wol_agg[, str_detect(colnames(wol_agg), "av")], 1, mean)
+wol_agg <- wol_agg[order(wol_agg$average, decreasing = TRUE), ]
+wol_agg <- wol_agg[, colnames(wol_agg != "average")]
+
+wol_agg$top <- ifelse(wol_agg$species %in% wol_agg$species[1:30],
+                  as.character(wol_agg$species), "other")
+
+unique(wol_agg$top)
+
+wol_agg$top <- as.character(wol_agg$top)
+wol_agg$top <- ordered(wol_agg$top, levels = c(wol_agg$top[wol_agg$top!="other"] , "other"))
+
+```
+
+## Create vectors of color
+
+```{r, eval = FALSE}
+vec_col1 <- c( "midnightblue", 
+               "turquoise1", "turquoise3",
+               "darkorange1", "darkorange3", "orange1", "orange3",  "orange4", 
+              "deepskyblue4",  "deepskyblue3", "deepskyblue1", 
+             "deeppink2", "gold", "violetred4", 
+           "tomato",  
+           "plum", "forestgreen", "coral",  
+           "yellow3",  "royalblue", 
+           "darkgoldenrod",  "magenta2",   "darkslateblue",               
+           "firebrick2", "firebrick4", 
+           "hotpink",  
+             "green1", "green3",  "green4", 
+             "goldenrod2",  "grey")
+```
+
+
+## Proportion of SynCom members overall
+
+```{r, fig.height=6, fig.width=6}
+wol_agg2 <- wol_agg[, colnames(wol_agg) %in% c("species", "top", "Soil_Ctrl123", colnames(wol_agg)[str_detect(colnames(wol_agg), "av")])]
+wol_agg2 <- wol_agg[, colnames(wol_agg) %in% c("species", "top", "Soil_SynCom_1_S49", "Soil_SynCom_2_S50", "Soil_1_S65", "Soil_2_S66", "Soil_3_S67")]
+
+wol_agg2 <- wol_agg2[, !str_detect(colnames(wol_agg2), "LB") & !str_detect(colnames(wol_agg2), "ater") & !str_detect(colnames(wol_agg2), "exu") ]
+
+dataplot <- melt(wol_agg2)
+dataplot <- dataplot[order(dataplot$variable), ]
+dataplot$variable <- ordered(dataplot$variable, levels = c(unique(as.character(dataplot$variable[!str_detect(dataplot$variable, "SynCom")])), unique(as.character(dataplot$variable[str_detect(dataplot$variable, "SynCom")]))))
+
+ggplot(dataplot, aes(fill=top, y=value, x=variable)) + 
+    geom_bar(stat="identity", position = "fill") +
+    scale_fill_manual(values = vec_col1) +
+   theme(text = element_text(size = 15)) +
+  labs(y = "Relative Abundance") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+# For Main figure:
+
+
+```{r, eval = TRUE, fig.height = 7, fig.width=12}
+chiglu <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Chi_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+  xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Chitinophaga")),
+                      paste("+ Glutathione 1 mM")))
+              
+
+
+SCfru <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+              geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x), limits = c(10, 500000)) +
+  scale_color_manual(values = vec_col1) +
+  geom_abline(intercept = 0, slope = 1) +
+    # geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil + SynCom Control") +
+    ylab("Soil + SynCom\n+ Fructose 5 g/L")
+
+SCrib <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Rib_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+              geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil + SynCom Control") +
+    ylab("Soil + SynCom\n+ Ribose 5 g/L")
+
+
+tre <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Tre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+              geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x), limits = c(10, 500000)) +
+  scale_color_manual(values = vec_col1) +
+  geom_abline(intercept = 0, slope = 1) +
+    # geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+    ylab("Soil\n+ Trehalose 5 g/L")
+
+fru <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+              geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.95) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+    ylab("Soil\n+ Fructose 5 g/L")
+```
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=9}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+fig <- plot_grid(chiglu, SCfru, tre,
+                         labels=c("", ""), 
+                         ncol = 3, 
+                         align = "hv")
+
+fig <- plot_grid(chiglu, SCrib, fru,
+                         labels=c("", ""), 
+                         ncol = 3, 
+                         align = "hv")
+
+
+fig
+# ggsave(file="soil_chiglu_SCrib_fru.png", plot=fig, height = 2.5, width = 9, dpi = 600)
+```
+
+## Seek to increase Burkholderia examples
+
+```{r}
+bu <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Bur_av)) + 
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+    geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil Control") +
+  ylab("Soil \n + Burkholderia") 
+
+burfru <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Bur_Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+        geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x))) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99, color = "black", fill = "gray35", alpha = 0.5) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil + Burkholderia") +
+  ylab("Soil + Burkholderia \n + Fructose 5 g/L") 
+
+SCfru <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Fructose 5 g/L") 
+
+fru <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil Control") +
+  ylab("Soil \n + Fructose 5 g/L") 
+
+ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil Control") +
+  ylab("Soil \n + Fructose 5 g/L") 
+```
+
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=11}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Expt_1/WoL")
+
+bur_increase_SC <- plot_grid(bu, burfru, SCfru, fru,
+                         ncol = 4, 
+                         align = "hv")
+
+bur_increase_SC
+# ggsave(file="soil_SynCom_vs_soil_SynCom_substrate_WoL_Syncom.png", plot=wol_sub_add, height = 5, width = 11, dpi = 600)
+```
+## Seek to increase Chitinophaga examples
+
+```{r}
+chi <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Chi_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+      geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray95"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil Control") +
+  ylab("Soil \n + Chitinophaga")
+
+chiglu <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Chi_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+        geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99, color = "black", fill = "gray35", alpha = 0.5) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+    theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil + Chitinophaga") +
+  ylab("Soil + Chitinophaga \n + Glutathione 1 mM") 
+
+SCglu <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Glutathione 1 mM") 
+
+glu <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil Control") +
+  ylab("Soil \n + Glutathione 1 mM")
+
+
+ggplot(wol_agg, aes(x = Soil_Ctrl123, y = ST_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+xlab("Soil Control") +
+  ylab("Soil \n + Sulfate/Thiosulfate 10 mM")
+```
+
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=11}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Expt_1/WoL")
+
+chi_increase_SC <- plot_grid(chi, chiglu, SCglu, glu,
+                         ncol = 4, 
+                         align = "hv")
+
+chi_increase_SC
+# ggsave(file="soil_SynCom_vs_soil_SynCom_substrate_WoL_Syncom.png", plot=wol_sub_add, height = 5, width = 11, dpi = 600)
+```
+
+## Probiotics: Soil vs. Soil  + Strain  
+
+
+```{r}
+
+Rho <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Rho_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil + ', italic("Rhodococcus"), ''))) 
+
+
+Bre <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Bre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil + ', italic("Brevibacillus"), ''))) 
+
+
+
+Lys <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Lys_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil + ', italic("Lysobacter"), ''))) 
+
+
+Rhi <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Rhi_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil + ', italic("Rhizobium"), ''))) 
+
+
+
+Chi <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Chi_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil + ', italic("Chitinophaga"), ''))) 
+
+
+Pae <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Pae_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil + ', italic("Paenibacillus"), ''))) 
+
+
+Bur <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Bur_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil + ', italic("Burkholderia"), ''))) 
+```
+
+```{r, fig.height=3, fig.width=4}
+
+ggplot(wol_agg, aes(x = Soil_Ctrl123, y = SynCom_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "longdash") +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+ ylab(~ atop(paste('Soil +  SynCom', ''))) 
+
+```
+
+
+```{r, eval = TRUE, fig.height = 5, fig.width=11}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+allprobiotics <- plot_grid(Bre, Bur, Chi, Lys, Pae, Rhi, Rho,
+                         ncol = 4, 
+                         align = "hv")
+
+allprobiotics
+# ggsave(file="soil_vs_soil_strain_WoLsubset_Syncom.png", plot=allprobiotics, height = 5, width = 11, dpi = 600)
+```
+
+## Prebiotics: Soil vs. Soil  + Substrate  
+
+
+```{r}
+
+ST <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = ST_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+  ylab("Soil + Sulfate \n & Thiosulfate 10 mM") 
+
+Put <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Put_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+  ylab("Soil \n + Putrescine 10 mM") 
+
+
+Fru <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+  ylab("Soil \n + Fructose 5 g/L") 
+
+Rib <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Rib_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+  ylab("Soil \n + Ribose 5 g/L") 
+
+
+Mal <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Mal_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+  ylab("Soil + Maltose \n & Maltodextrin 5 g/L") 
+
+Tre <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Tre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+  ylab("Soil \n + Trehalose 5 g/L") 
+
+Glu <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3.5, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3.5, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3.5, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3.5, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+        theme(axis.text=element_text(size=10), axis.title=element_text(size=11)) +
+ xlab("Soil Control") +
+  ylab("Soil \n + Glutathione 1 mM") 
+
+```
+
+
+```{r, eval = TRUE, fig.height = 5, fig.width=11}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+allprebiotics <- plot_grid(Fru, Rib, Tre, Mal, Glu, Put, ST,
+                         ncol = 4, 
+                         align = "hv")
+
+allprebiotics
+# ggsave(file="soil_vs_soil_substrate_WoLsubset_Syncom.png", plot=allprebiotics, height = 5, width = 11, dpi = 600)
+```
+## Soil vs Soil + pre + probiotic
+
+
+```{r, eval = TRUE, fig.height = 7, fig.width=12}
+
+
+burfru <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Bur_Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Burkholderia")),
+                      paste("+ Fructose 5 g/L")))
+
+
+
+burrib <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Bur_Rib_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Burkholderia")),
+                      paste("+ Ribose 5 g/L")))
+
+
+burtre <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Bur_Tre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Burkholderia")),
+                      paste("+ Trehalose 5 g/L")))
+
+
+chiglu <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Chi_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Chitinophaga")),
+                      paste("+ Glutathione 1 mM")))
+
+chiST <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Chi_Thio_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+    ylab(~ atop(paste('Soil + ',italic("Chitinophaga")),
+                      paste("+ Sulfate/thiosulfate 10 mM")))
+
+
+paerib <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Pae_Rib_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Paenibacillus")),
+                      paste("+ Ribose 5 g/L")))
+
+
+paetre <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Pae_Tre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Paenibacillus")),
+                      paste("+ Trehalose 5 g/L")))
+
+paeput <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Pae_Put_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Paenibacillus")),
+                      paste("+ Putrescine 10 mM")))
+
+
+rhiglu <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Rhi_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Rhizobium")),
+                      paste("+ Glutathione 1 mM")))
+
+
+rhoput <- ggplot(wol_agg, aes(x = Soil_Ctrl123, y = Rho_Put_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil Control") +
+  ylab(~ atop(paste('Soil + ',italic("Rhodococcus")),
+                      paste("+ Putrescine 10 mM")))
+```
+
+
+```{r, eval = TRUE, fig.height = 7.5, fig.width=11}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+dual <- plot_grid(burfru, burrib, burtre, chiglu, chiST, paerib, paetre, paeput, rhiglu, rhoput,
+                         ncol = 4, 
+                         align = "hv")
+
+dual
+# ggsave(file="soil_vs_soil_dualprepro_WoLsubset_Syncom.png", plot=dual, height = 7.5, width = 11, dpi = 600)
+```
+
+## Soil + probiotic vs Soil + pre + probiotic  
+
+To isolate the effect of adding prebiotic as compared to probiotic alone
+
+
+```{r, eval = TRUE, fig.height = 7, fig.width=12}
+
+
+burfru2 <- ggplot(wol_agg, aes(x = Bur_av, y = Bur_Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Burkholderia"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Burkholderia")),
+                      paste("+ Fructose 5 g/L")))
+
+
+
+burrib2 <- ggplot(wol_agg, aes(x = Bur_av, y = Bur_Rib_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Burkholderia"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Burkholderia")),
+                      paste("+ Ribose 5 g/L")))
+
+
+burtre2 <- ggplot(wol_agg, aes(x = Bur_av, y = Bur_Tre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Burkholderia"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Burkholderia")),
+                      paste("+ Trehalose 5 g/L")))
+
+
+chiglu2 <- ggplot(wol_agg, aes(x = Chi_av, y = Chi_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Chitinophaga"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Chitinophaga")),
+                      paste("+ Glutathione 1 mM")))
+
+chiST2 <- ggplot(wol_agg, aes(x = Chi_av, y = Chi_Thio_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Chitinophaga"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Chitinophaga")),
+                      paste("+ Sulfate/thiosulfate 10 mM")))
+
+
+paerib2 <- ggplot(wol_agg, aes(x = Pae_av, y = Pae_Rib_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Paenibacillus"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Paenibacillus")),
+                      paste("+ Ribose 5 g/L")))
+
+
+paetre2 <- ggplot(wol_agg, aes(x = Pae_av, y = Pae_Tre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Paenibacillus"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Paenibacillus")),
+                      paste("+ Trehalose 5 g/L")))
+
+paeput2 <- ggplot(wol_agg, aes(x = Pae_av, y = Pae_Put_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Paenibacillus"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Paenibacillus")),
+                      paste("+ Putrescine 10 mM")))
+
+
+rhiglu2 <- ggplot(wol_agg, aes(x = Rhi_av, y = Rhi_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Rhizobium"), ""))) +
+  ylab(~ atop(paste('Soil + ',italic("Rhizobium")),
+                      paste("+ Glutathione 1 mM")))
+
+
+rhoput2 <- ggplot(wol_agg, aes(x = Rho_av, y = Rho_Put_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab(~ atop(paste('Soil + ', italic("Rhodococcus"), ''))) +
+  ylab(~ atop(paste('Soil + ',italic("Rhodococcus")),
+                      paste("+ Putrescine 10 mM")))
+```
+
+
+```{r, eval = TRUE, fig.height = 5, fig.width=11}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+dual2 <- plot_grid(burfru, burrib, burtre, chiglu, paerib, paetre, rhiglu, 
+                         ncol = 4, 
+                         align = "hv")
+
+dual2 <- plot_grid(burfru2, burrib2, burtre2, chiglu2, paerib2, paetre2, rhiglu2, 
+                         ncol = 4, 
+                         align = "hv")
+
+dual2
+# ggsave(file="soil_vs_soil_dualprepro2_WoLsubset_Syncom.png", plot=dual2, height =5, width = 11, dpi = 600)
+```
+
+## Soil + SynCom vs. Soil + SynCom + Substrate  
+
+
+```{r, eval = TRUE, fig.height = 7, fig.width=12}
+
+# Fructose
+
+SCfru <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Fru_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Fructose 5 g/L") 
+
+# Ribose
+
+SCrib <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Rib_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Ribose 5 g/L") 
+
+
+# Trehalose
+
+SCtre <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Tre_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Trehalose 5 g/L") 
+
+# Maltose + Maltodextrin
+
+SCmal <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Mal_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom + Maltose \n & Maltodextrin 5 g/L") 
+
+
+# Glutathione
+
+SCglu <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Glu_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Glutathione 1 mM") 
+
+# Sulfate + Thiosulfate
+
+SCST <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_ST_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom + Sulfate \n & Thiosulfate 10 mM") 
+
+
+# Putrescine
+
+SCpu <- ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Put_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+      theme(axis.text=element_text(size=10), axis.title=element_text(size=10)) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Putrescine 10 mM") 
+
+```
+
+
+```{r, eval = TRUE, fig.height = 5, fig.width=11}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+wol_sub_add <- plot_grid(SCfru, SCrib, SCtre, SCmal, SCglu, SCpu, SCST, 
+                         labels=c("a", "b", "c", "d", "e", "f", "g"), 
+                         ncol = 4, 
+                         align = "hv")
+
+wol_sub_add
+# ggsave(file="soil_SynCom_vs_soil_SynCom_substrate_WoLsubset_Syncom.png", plot=wol_sub_add, height = 5, width = 11, dpi = 600)
+```
+
+```{r, eval = TRUE, fig.height = 8, fig.width=15}
+
+wol_sub_add <- plot_grid(SCfru, SCrib, SCtre, SCmal, SCglu, SCpu, SCST, 
+                         labels=c("a", "b", "c", "d", "e", "f", "g"), 
+                         ncol = 4, 
+                         align = "hv")
+
+
+dual <- plot_grid(burfru, burrib, burtre, chiglu, paerib, paetre, rhiglu, 
+                         ncol = 4, 
+                         align = "hv")
+
+allprebiotics <- plot_grid(Fru, Rib, Tre, Mal, Glu, Put, ST,
+                         ncol = 4, 
+                         align = "hv")
+
+allprobiotics <- plot_grid(Bre, Bur, Chi, Lys, Pae, Rhi, Rho,
+                         ncol = 4, 
+                         align = "hv")
+
+all <-  plot_grid(Bre, Bur, Chi, Lys, Pae, Rhi, Rho,
+                  burfru, burrib, burtre, chiglu, paerib, paetre, rhiglu, 
+                  SCfru, SCrib, SCtre, SCmal, SCglu, SCpu, SCST, 
+                  Fru, Rib, Tre, Mal, Glu, Put, ST,
+                  # labels=c("a", "b", "c", "d", "e", "f", "g", 
+                  #          "i", "j", "k", "l", "m", "n", "o", 
+                  #          "p", "q", "r", "s", "t", "u", "v", 
+                  #          "w", "x", "y", "z", "aa", "bb", "cc"), 
+                         ncol = 7, 
+                         align = "hv")
+all
+
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# ggsave(file="soil_allinterventionsbigfigure.png", plot=all, height = 8, width = 15, dpi = 600)
+
+
+
+
+legend <-  ggplot(wol_agg, aes(x = SynCom_av, y = SynCom_Put_av)) +
+  geom_point(aes(color = top), size = 2.5, alpha = 0.5) +
+                  geom_point(data = wol_agg[wol_agg$species == "Clostridium", ], color = "black", size = 3, shape = 17, fill = "black") +
+                geom_point(data = wol_agg[wol_agg$species == "Bosea", ], color = "black", size = 3, shape = 8,) +
+                  geom_point(data = wol_agg[wol_agg$species == "Azospirillum", ], color = "black", size = 3, shape = 8) +
+                  geom_point(data = wol_agg[wol_agg$species == "Streptomyces", ], color = "gray44", size = 3, shape = 8) +
+          geom_point(data = wol_agg[wol_agg$top != "other", ], aes(color = top), size = 2.5) +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = trans_breaks('log10', function(x) 10^x)) +
+  scale_color_manual(values = vec_col1) +
+  # geom_abline(intercept = 0, slope = 1) +
+    geom_smooth(data = wol_agg, method='lm', alpha = 0.5, level = 0.99) +
+    #stat_regline_equation(label.y = 500, aes(label = ..rr.label..)) +
+    theme(legend.position = "bottom", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"), legend.box="vertical")  +
+      theme(axis.text = element_text(size=10), axis.title = element_text(size=10)) +
+  guides(colour = guide_legend(nrow=2, byrow=FALSE, label.theme = element_text(angle = 0, face = "italic"), title="SynCom members")) +
+xlab("Soil + SynCom") +
+  ylab("Soil + SynCom \n + Putrescine 10 mM") 
+
+legend
+
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# ggsave(file="syncomlegend.png", plot=legend, height = 8, width = 15, dpi = 600)
+```
+
+#-----------------------------------
+
+
+## check abundances correlations
+
+```{r, fig.width = 8, fig.height = 8}
+wol_agg_save <- wol_agg
+wol_agg_save <- wol_agg_save[, !str_detect(colnames(wol_agg_save), "Neg")]
+wol_agg_save <- wol_agg_save[, !str_detect(colnames(wol_agg_save), "LB")]
+wol_agg_save <- wol_agg_save[, !str_detect(colnames(wol_agg_save), "ater")]
+wol_agg_save <- wol_agg_save[, !str_detect(colnames(wol_agg_save), "xu")]
+
+# Predicted competition score only (optional)
+# wol_agg_save <- wol_agg_save[wol_agg_save$species %in% rownames(clo), ] # clo comes from 3.MIND_KEGG_pathways_Run1_wolsubset.Rmd. Make sure to run it all before this command
+
+# Maybe better to remove SC samples
+test <- wol_agg_save
+test <- test[, str_detect(colnames(test), "av") | colnames(test) == "Soil_Ctrl123" | colnames(test) == "species"]
+test <- test[, !str_detect(colnames(test), "top")]
+# test <- test[, !str_detect(colnames(test), "Soil_Ctrl123")]
+test$species[test$species == ""] <- "unknown"
+rownames(test) <- test$species
+test <- test[, !str_detect(colnames(test), "species")]
+test <- data.frame(t(test))
+rownames(test) <- str_replace(rownames(test), "wol", "SynCom")
+
+# Correlation plot, all bacteria, all conditions
+library(Hmisc)
+library(corrplot)
+
+mat <- rcorr(log(as.matrix(test)+0.001))
+mat$P[is.na(mat$P)] <- 0
+
+corrplot(mat$r,
+         p.mat = mat$P,
+         sig.level = 0.05,
+         insig = "blank",
+         order = "hclust",
+         hclust.method = "ward.D2",
+         method = "color", 
+         tl.col = "black", 
+         tl.cex = 0.6,
+         col=rev(brewer.pal(n=8, name="RdYlBu")),
+         font = 3
+         )
+```
+
+Most correlations are positive. BUT strong competitions should result in negative correlations. See below:
+
+
+## Check negative correlation between competitors
+
+```{r, fig.height = 4, fig.width = 6}
+test$sample <- rownames(test)
+
+# Check Clostridium (one of the highest increase in abundance when adding sugars) and its closest competitors:
+
+# Clostridium main competitors in Soil
+
+ggplot(test, aes(x = Clostridium, y = Azospirillum, label = sample)) + 
+         geom_point() + 
+  geom_text(hjust=0, vjust=0) +
+  scale_x_log10() + 
+  scale_y_log10()
+
+ggplot(test, aes(x = Clostridium, y = Streptomyces, label = sample)) + 
+         geom_point() + 
+  geom_text(hjust=0, vjust=0) +
+  scale_x_log10() + 
+  scale_y_log10()
+
+ggplot(test, aes(x = Clostridium, y = Bosea, label = sample)) + 
+         geom_point() + 
+  geom_text(hjust=0, vjust=0) +
+  scale_x_log10() + 
+  scale_y_log10()
+```
+
+```{r, fig.height = 5, fig.width = 6}
+ggplot(test, aes(x = Rhizobium, y = Burkholderia, label = sample)) + 
+         geom_point() + 
+  geom_text(hjust=0.5, vjust=0) +
+  scale_x_log10() + 
+  scale_y_log10() +
+  geom_point(data = test[rownames(test) == "Soil_Ctrl123", ], col = "blue", size = 2)
+
+
+# Need to disable 'wol_agg_save <- wol_agg_save[wol_agg_save$species %in% rownames(clo), ]' line 1180 to run this one. It's because Chitinophaga was absent native soil we couldn't predict guilds.
+ggplot(test, aes(x = Chitinophaga, y = Mucilaginibacter, label = sample)) + 
+         geom_point() + 
+  geom_text(hjust=0.5, vjust=0) +
+  scale_x_log10() + 
+  scale_y_log10() +
+  geom_point(data = test[rownames(test) == "Soil_Ctrl123", ], col = "blue", size = 2)
+
+# Chitinophaga too low (= absent) when not added: keep only samples in which it was artificially added
+ggplot(test[str_detect(rownames(test), "SynCom") | str_detect(rownames(test), "Chi"), ], aes(x = Chitinophaga, y = Mucilaginibacter, label = sample)) + 
+         geom_point() + 
+  geom_text(hjust=0.5, vjust=0) +
+  scale_x_log10() + 
+  scale_y_log10() +
+  geom_point(data = test[rownames(test) == "Soil_Ctrl123", ], col = "blue", size = 2)
+# And now we do have a negative correlation!
+```
+
+```{r}
+chimu <- ggplot(test[str_detect(rownames(test), "SynCom") | str_detect(rownames(test), "Chi"), ], aes(x = Chitinophaga, y = Mucilaginibacter, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+  geom_smooth(method = "lm", color = "darkred") + 
+        # stat_regline_equation(label.y = 3.6, label.x = 2.4, aes(label = ..rr.label..)) +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+  xlab(~atop(paste(italic("Chitinophaga"), ""))) +
+  ylab(~atop(paste(italic("Mucilaginibacter"), "")))
+
+burrhi <- ggplot(test, aes(x = Burkholderia, y = Rhizobium, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+    geom_smooth(method = "lm", color = "darkred") + 
+        # stat_regline_equation(label.y = 4.3, label.x = 4.7, aes(label = ..rr.label..)) +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+  xlab(~atop(paste(italic("Burkholderia"), ""))) +
+  ylab(~atop(paste(italic("Rhizobium"), "")))
+
+cloaz <- ggplot(test, aes(x = Clostridium, y = Azospirillum, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+    geom_smooth(method = "lm", color = "darkred") + 
+      # stat_regline_equation(label.y = 6.2, label.x = 4.7, aes(label = ..rr.label..)) +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+  xlab(~atop(paste(italic("Clostridium"), ""))) +
+  ylab(~atop(paste(italic("Azospirillum"), "")))
+
+clostr <- ggplot(test, aes(x = Clostridium, y = Streptomyces, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+    geom_smooth(method = "lm", color = "darkred") + 
+      # stat_regline_equation(label.y = 6.2, label.x = 4.7, aes(label = ..rr.label..)) +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+  xlab(~atop(paste(italic("Clostridium"), ""))) +
+  ylab(~atop(paste(italic("Streptomyces"), "")))
+
+clobo <- ggplot(test, aes(x = Clostridium, y = Bosea, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+  scale_y_log10(labels = trans_format("log10", math_format(10^.x)), breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+    geom_smooth(method = "lm", color = "darkred") + 
+      # stat_regline_equation(label.y = 6.2, label.x = 4.7, aes(label = ..rr.label..)) +
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+  xlab(~atop(paste(italic("Clostridium"), ""))) +
+  ylab(~atop(paste(italic("Bosea"), "")))
+```
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=10}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+negativecorr <- plot_grid(chimu, burrhi, cloaz,  
+                         labels=c("", "", ""), 
+                         ncol = 3, 
+                         align = "hv")
+
+negativecorr
+# ggsave(file="soil_negativecorrelations_all_experiments.png", plot=negativecorr, height = 2.5, width = 10, dpi = 600)
+
+plot_grid(cloaz,  clobo, clostr, 
+                         labels=c("", "", ""), 
+                         ncol = 3, 
+                         align = "hv")
+```
+## Test: Check fold change
+
+If one bacteria goes up, its competitors go down?
+
+
+```{r}
+wol_agg_FC <- wol_agg_save
+rownames(wol_agg_FC) <- wol_agg_FC$species
+
+averages <- wol_agg_FC[, str_detect(colnames(wol_agg_FC), "av") | str_detect(colnames(wol_agg_FC), "Ctrl")]
+
+averages <- averages[, !str_detect(colnames(averages), "LB")]
+averages <- averages[, !str_detect(colnames(averages), "exu")]
+averages <- averages[, !str_detect(colnames(averages), "water")]
+
+averages <- data.frame(cbind(averages[, !str_detect(colnames(averages), "SynCom")], averages[, str_detect(colnames(averages), "SynCom")]))
+
+averages
+
+# Separate samples containing SynCom or not (NOT the same reference to calculate the Fold Change)
+averages_FC_noSC <- averages[, !str_detect(colnames(averages), "SynCom")] / averages$Soil_Ctrl123
+averages_FC_SC <- averages[, str_detect(colnames(averages), "SynCom")] / averages$SynCom_av
+
+averages_FC <- data.frame(cbind(averages_FC_noSC, averages_FC_SC))
+averages_FC <- averages_FC[order(apply(averages_FC, 1, mean), decreasing = TRUE), ]
+sort(apply(averages_FC, 1, mean))
+
+colnames(averages_FC) <- str_replace(colnames(averages_FC), "Thio", "ST")
+
+scinsoil <- averages_FC[rownames(averages_FC) %in% c("Arthrobacter", "Bradyrhizobium", "Niastella", "Bosea", "Chitinophaga", "Lysobacter", "Mucilaginibacter", "Paenibacillus", "Brevibacillus", "Rhodococcus", "Rhizobium", "Burkholderia", "Variovorax"), str_detect(colnames(averages_FC), "Chi")]
+
+clostri <- averages_FC[rownames(averages_FC) %in% c("Clostridium", "Azospirillum", "Streptomyces", "Bosea"), ]
+
+sort(apply(averages_FC, 2, mean))
+```
+
+```{r}
+# What are the biggest fold changes? (Top 5)
+averages_FC2 <- averages_FC[, !colnames(averages_FC) %in% c("Soil_Ctrl123", "SynCom_av")]
+# averages_FC2 <- averages_FC2[, str_detect(colnames(averages_FC2), "SynCom")] # soil + syncom only (optional)
+
+# Find maximum fold changes
+averages_FC2$max1 <- apply(averages_FC2, 1, function(x) sort(x, decreasing = TRUE)[1])
+averages_FC2$max2 <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) sort(x, decreasing = TRUE)[2])
+averages_FC2$max3 <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) sort(x, decreasing = TRUE)[3])
+averages_FC2$max4 <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) sort(x, decreasing = TRUE)[4])
+averages_FC2$max5 <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) sort(x, decreasing = TRUE)[5])
+
+
+# Find conditions for maximum fold changes
+## create maxn function
+maxn <- function(n) function(x) order(x, decreasing = TRUE)[!is.na(x)][n]
+
+averages_FC2$max1_condition <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) names(x)[maxn(1)(x)])
+averages_FC2$max2_condition <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) names(x)[maxn(2)(x)])
+averages_FC2$max3_condition <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) names(x)[maxn(3)(x)])
+averages_FC2$max4_condition <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) names(x)[maxn(4)(x)])
+averages_FC2$max5_condition <- apply(averages_FC2[, !str_detect(colnames(averages_FC2), "max")], 1, function(x) names(x)[maxn(5)(x)])
+
+
+averages_FC2 <- averages_FC2[order(averages_FC2$max1, decreasing = TRUE), str_detect(colnames(averages_FC2), "max")]
+averages_FC2[rownames(averages_FC2) %in% c("Arthrobacter", "Bradyrhizobium", "Niastella", "Bosea", "Chitinophaga", "Lysobacter", "Mucilaginibacter", "Paenibacillus", "Brevibacillus", "Rhodococcus", "Rhizobium", "Burkholderia", "Variovorax"), ]
+
+# Sporolactobacillus has the highest fold change, but in was very low in native soil,hence didn't get enough signal for guild prediction. 
+## Let's focus on genera for which we have a guild prediction (from 3.MIND_KEGG_pathways_Run1_wolsubset.Rmd)
+averages_FC3 <- averages_FC2[rownames(averages_FC2) %in% rownames(TE_pca), ]
+averages_FC3[order(averages_FC3$max1, decreasing = TRUE), str_detect(colnames(averages_FC3), "max")]
+
+```
+
+
+```{r, fig.width = 8, fig.height= 10}
+cool = rainbow(50, start=rgb2hsv(col2rgb('cyan'))[1], end=rgb2hsv(col2rgb('blue'))[1])
+warm = rainbow(50, start=rgb2hsv(col2rgb('red'))[1], end=rgb2hsv(col2rgb('yellow'))[1])
+cols = c(rev(cool), "white",  rev(warm))
+#cols = c(rev(cool),  rev(warm))
+mypalette <- colorRampPalette(cols)(101)
+
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# svg("Soil_allfoldchanges.svg", height = 10, width = 8)
+heatmap.2(as.matrix(log(averages_FC)), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          # col = mypalette, 
+          col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+                     breaks = seq(-7.5, 7, 0.75), 
+          labRow=as.expression(lapply(rownames(averages_FC), function(a) bquote(italic(.(a))))),
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(10,10), 
+          lhei=c(1.5,8), lwid=c(1,5)
+          )
+# dev.off()
+```
+
+```{r, fig.width = 10, fig.height= 3.5}
+
+
+# setwd("/home/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+# svg("Clostricompet_all_experiments_heatmap.svg", height = 4, width = 10)
+ #Clostridium and main competitors in Soil
+heatmap.2(as.matrix(log(averages_FC[rownames(averages_FC) %in% c("Clostridium", "Bosea", "Streptomyces", "Azospirillum"), ])), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(8,10), 
+          lhei=c(1,1.5), lwid=c(2,8), cexRow = 1
+          )
+
+# dev.off()
+
+
+heatmap.2(as.matrix(log(averages[rownames(averages) %in% c("Burkholderia", "Rhizobium", "Variovorax"), ])), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          # col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+          col = c(rev(brewer.pal(8, "Blues")), "white", brewer.pal(8, "YlOrRd")),
+          scale = "none", 
+          Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(10,15), 
+          lhei=c(1.3,2), lwid=c(2,8), cexRow = 1
+          )
+
+heatmap.2(as.matrix(log(averages_FC[rownames(averages_FC) %in% c("Burkholderia", "Rhizobium", "Variovorax"), ])), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          # col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+          col = c(rev(brewer.pal(8, "Blues")), "white", brewer.pal(8, "YlOrRd")),
+          scale = "row", 
+          Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(10,15), 
+          lhei=c(1.3,2), lwid=c(2,8), cexRow = 1
+          )
+```
+
+
+## Heatmap fold changes, Clostridium competitors and non-competitors
+
+
+```{r, fig.width = 10, fig.height= 10}
+clo <- clo[order(clo$Clostridium, decreasing = TRUE), ]
+sort(clo$Clostridium)
+
+clostridium_compet <- rownames(clo[clo$Clostridium >= 0, ]) # from competition prediction, 3.MIND_KEGG_pathways_Run1_wolsubset.Rmd script
+
+clostri1 <- averages_FC[rownames(averages_FC) %in% rownames(clo[clo$Clostridium>=0, ]), ]
+clostri1 <- clostri1[rownames(clo[clo$Clostridium>=0, ]), ]
+
+ #Clostridium and main competitors in Soil
+heatmap.2(as.matrix(log(clostri1)), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+          # col = c(rev(brewer.pal(8, "Blues")), "white", brewer.pal(8, "YlOrRd")),
+                     breaks = seq(-7.5, 7, 0.75), 
+
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(10,10), 
+          lhei=c(1.3,3), lwid=c(2,8), cexRow = 1
+          )
+
+
+clostri2 <- averages_FC[rownames(averages_FC) %in% rownames(clo[clo$Clostridium<=0, ]), ]
+clostri2 <- clostri2[rownames(clo[clo$Clostridium<=0, ]), ]
+
+ #Clostridium and non competitors in Soil
+heatmap.2(as.matrix(log(clostri2)), 
+          trace = "none",           
+          hclustfun = hclustfunc, 
+          distfun = distfunc, 
+          col = c(rev(brewer.pal(9, "Blues")), "white", brewer.pal(9, "YlOrRd")),
+          # col = c(rev(brewer.pal(8, "Blues")), "white", brewer.pal(8, "YlOrRd")),
+                     breaks = seq(-7.5, 7, 0.75), 
+
+          scale = "none", 
+          # Rowv = FALSE,
+          # Colv = FALSE,
+          margins=c(10,10), 
+          lhei=c(1.3,3), lwid=c(2,8), cexRow = 1
+          )
+```
+
+
+
+
+```{r, fig.height = 3.5, fig.width = 5}
+# Fold change Rhizobium and Burkholderia are negatively correlated:
+
+toto <- data.frame(t(averages_FC))
+toto$sample <- rownames(toto)
+
+ #Clostridium and main competitors in Soil
+
+cloaz <- ggplot(toto, aes(x = Clostridium, y = Azospirillum, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = function(x) format(x, scientific = FALSE)) + 
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE), limits = c(0.001, 10)) +  
+      theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+  # geom_text(hjust=0.5, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+
+clobo <- ggplot(toto, aes(x = Clostridium, y = Bosea, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = function(x) format(x, scientific = FALSE)) + 
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE), limits = c(0.001, 10)) +  
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+
+    # geom_text(hjust=0, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+
+clostr <- ggplot(toto, aes(x = Clostridium, y = Streptomyces, label = sample)) +
+  geom_point() +
+  scale_x_log10(labels = function(x) format(x, scientific = FALSE)) + 
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE), limits = c(0.001, 10)) + 
+        theme(legend.position = "none", panel.background = element_rect(fill = "white"), panel.grid.major = element_line(colour = "gray92"), panel.grid.minor = element_line(colour = "gray92"))  +
+
+    # geom_text(hjust=0, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+```
+
+
+```{r, eval = TRUE, fig.height = 2.5, fig.width=10}
+setwd("/media/moyne/Moyne_disk/Soil_project/Final_datasets/REAL_SOIL_SAMPLES/Figures_final")
+
+clocompet <- plot_grid(cloaz, clobo, clostr, 
+                         labels=c("", "", ""), 
+                         ncol = 3, 
+                         align = "hv")
+
+clocompet
+# ggsave(file="soil_Clostridium_competitors_all_experiments.png", plot=clocompet, height = 2.5, width = 10, dpi = 600)
+```
+
+
+```{r}
+# other competitors
+
+ggplot(toto, aes(x = Burkholderia, y = Rhizobium, label = sample)) +
+  geom_point() +
+  scale_x_log10() + 
+  scale_y_log10() +
+    geom_text(hjust=0, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+
+ggplot(toto, aes(x = Burkholderia, y = Variovorax, label = sample)) +
+  geom_point() +
+  scale_x_log10() + 
+  scale_y_log10() +
+    geom_text(hjust=0, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+
+# Not strong competitors:
+ggplot(toto, aes(x = Burkholderia, y = Clostridium, label = sample)) +
+  geom_point() +
+  scale_x_log10() + 
+  scale_y_log10() +
+    geom_text(hjust=0, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+
+# no guild prediction for Chitinophaga so to get this last plot one should unactivate 'averages_FC <- averages_FC[rownames(averages_FC) %in% rownames(clo), ]' command line 1185
+# Also, Chitinophaga was so low in native soil that maybe we should only look at samples in which we artificially added it
+ggplot(toto, aes(x = Chitinophaga, y = Mucilaginibacter, label = sample)) +
+  geom_point() +
+  scale_x_log10() + 
+  scale_y_log10() +
+    geom_text(hjust=0, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+
+ggplot(toto[str_detect(rownames(toto), "Chi") | str_detect(rownames(toto), "SynCom") ,], aes(x = Chitinophaga, y = Mucilaginibacter, label = sample)) +
+  geom_point() +
+  scale_x_log10() + 
+  scale_y_log10() +
+    geom_text(hjust=0, vjust=0) +
+  geom_hline(yintercept = 1) +
+  geom_vline(xintercept = 1)
+
+```
+
+
+
+
+
